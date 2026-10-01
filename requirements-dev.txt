@@ -1,0 +1,5 @@
+# Local dev: runtime + scripts (bundle/parity tools) + tests
+-r requirements.txt
+pandas==3.0.6
+pyarrow==25.0.1
+pytest==9.1.1

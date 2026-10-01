@@ -22,5 +22,6 @@ def _csv(name: str, default: str) -> list[str]:
 CORS_ORIGINS = _csv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 # Optional regex for extra origins, e.g. Vercel preview URLs: https://my-app-.*\.vercel\.app
 CORS_ORIGIN_REGEX = os.getenv("CORS_ORIGIN_REGEX") or None
-# SQLite audit log path; empty falls back to audit_db in config/engine.yaml
-AUDIT_DB = os.getenv("AUDIT_DB") or None
+# SQLite audit log path; empty falls back to audit_db in config/engine.yaml.
+# On Vercel only /tmp is writable (and it is wiped when the instance is recycled).
+AUDIT_DB = os.getenv("AUDIT_DB") or ("/tmp/audit.sqlite" if os.getenv("VERCEL") else None)

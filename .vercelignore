@@ -1,0 +1,11 @@
+# Keep the Vercel backend function small: only src/, config/, artifacts/recordings and data/scenarios are needed
+demo/
+docs/
+notebooks/
+tests/
+scripts/
+data/raw/
+data/processed/
+artifacts/runtime/
+*.md
+!README.md

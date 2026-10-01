@@ -1,12 +1,9 @@
-# Engine API + simulator (tested in conda env "nitmx-proto", Python 3.11, macOS arm64)
+# Engine API runtime (what Render/Vercel install). Tested with Python 3.11.
 fastapi==0.142.2
 uvicorn[standard]==0.54.0
 pydantic==2.13.5
 PyYAML==6.0.3
 python-dotenv==1.2.4
 httpx==0.28.1
-lightgbm==4.7.0     # macOS also needs OpenMP: conda install -c conda-forge llvm-openmp
 numpy==2.4.6
-pandas==3.0.6
-pyarrow==25.0.1
-pytest==9.1.1
+lightgbm==4.7.0     # only loaded for bundle models; macOS also needs OpenMP: conda install -c conda-forge llvm-openmp

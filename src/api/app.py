@@ -52,6 +52,13 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS,
 runtime.app = app
 
 
+@app.middleware("http")
+async def ensure_clock(request: Request, call_next):
+    # Serverless hosts (Vercel) may skip lifespan startup; start the clock loop on first request instead.
+    runtime.start()
+    return await call_next(request)
+
+
 def _run(rid: str):
     try:
         return runtime.get(rid)

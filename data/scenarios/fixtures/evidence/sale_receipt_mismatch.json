@@ -1,0 +1,11 @@
+{
+  "synthetic": true,
+  "type": "sale_record",
+  "title": "ใบเสร็จที่ยอดและเวลาไม่ตรง (ตัวอย่างสังเคราะห์)",
+  "order_id": "ORD-SYN-20261001-044",
+  "amount_thb": "350.00",
+  "paid_at": "2026-10-01T11:40:00+07:00",
+  "payer_hint": "•7788",
+  "items": [{"name": "ข้าวมันไก่ (synthetic)", "qty": 7, "unit_thb": "50.00"}],
+  "note": "Fictional document for testing inconsistent evidence."
+}

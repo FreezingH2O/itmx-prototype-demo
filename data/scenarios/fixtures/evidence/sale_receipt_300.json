@@ -1,0 +1,11 @@
+{
+  "synthetic": true,
+  "type": "sale_record",
+  "title": "ใบสั่งซื้อข้าวมันไก่ 6 กล่อง 300 บาท (ตัวอย่างสังเคราะห์)",
+  "order_id": "ORD-SYN-20261001-017",
+  "amount_thb": "300.00",
+  "paid_at": "2026-10-01T10:06:10+07:00",
+  "payer_hint": "•1001",
+  "items": [{"name": "ข้าวมันไก่ (synthetic)", "qty": 6, "unit_thb": "50.00"}],
+  "note": "Fictional document for the demo. No real person or order."
+}

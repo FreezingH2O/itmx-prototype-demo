@@ -1,0 +1,8 @@
+name: nitmx-proto
+channels: [conda-forge, defaults]
+dependencies:
+  - python=3.11
+  - llvm-openmp
+  - pip
+  - pip:
+      - -r requirements.txt

@@ -1,0 +1,628 @@
+import { useEffect, useState, type ReactNode } from 'react'
+import { api, newKey, type Json } from '../api'
+import { ACTION_LABEL, SHORT_ACTION, hm, money, recStatus, shortId, thb, time, usdt } from '../format'
+import { Icon } from '../icons'
+import { useView } from '../useRun'
+
+type Props = { run: Json; version: number; present: boolean; compact?: boolean }
+type Org = 'bank_a' | 'bank_b' | 'exchange'
+type Sel = { org: Org; seq: number } | null
+const ORGS: { id: Org; name: string }[] = [
+  { id: 'bank_a', name: 'Bank A' },
+  { id: 'bank_b', name: 'Bank B' },
+  { id: 'exchange', name: 'Exchange' },
+]
+const NAME: Record<Org, string> = { bank_a: 'Bank A', bank_b: 'Bank B', exchange: 'Exchange' }
+
+export default function Institutions({ run, version, present, compact }: Props) {
+  const a = useView<Json>(`/v1/runs/${run.run_id}/views/bank_a`, version).data
+  const b = useView<Json>(`/v1/runs/${run.run_id}/views/bank_b`, version).data
+  const x = useView<Json>(`/v1/runs/${run.run_id}/views/exchange`, version).data
+  const views: Record<Org, Json> = { bank_a: a, bank_b: b, exchange: x }
+  const [sel, setSel] = useState<Sel>(null)
+  const [expanded, setExpanded] = useState<Org | null>(null)
+
+  // Default inspector selection: the most recent event the engine scored.
+  const fallback = latestScored(views)
+  const active = sel ?? fallback
+  const pick = (org: Org) => (seq: number) => setSel({ org, seq })
+  const panelProps = (org: Org) => ({ org, data: views[org], run, present, sel: active, onSelect: pick(org), onExpand: () => setExpanded(org) })
+
+  return (
+    <div className="page">
+      {!compact && (
+        <div className="page-head">
+          <div>
+            <div className="page-title"><h1>Institutions</h1><span className="tag lg">Simulated clients</span></div>
+            <p>Recommendations inform officers. Only acknowledged decisions change balances.</p>
+          </div>
+        </div>
+      )}
+      <div className="grid cols-3">
+        <BankAPanel {...panelProps('bank_a')} />
+        <BankBPanel {...panelProps('bank_b')} />
+        <ExchangePanel {...panelProps('exchange')} />
+      </div>
+      {!compact && <div className="card" style={{ marginTop: 16 }}><Inspector views={views} sel={active} present={present} /></div>}
+      {!compact && <div className="foot-note">Prototype design · Synthetic data</div>}
+      {expanded && views[expanded] && (
+        <Expanded org={expanded} data={views[expanded]} views={views} run={run} present={present}
+          sel={active?.org === expanded ? active : null} onSelect={pick(expanded)} onClose={() => setExpanded(null)} />
+      )}
+    </div>
+  )
+}
+
+function latestScored(views: Record<Org, Json>): Sel {
+  let best: { org: Org; seq: number; t: string } | null = null
+  for (const o of ORGS) {
+    for (const f of views[o.id]?.feed ?? []) {
+      if (!f.assessment_id) continue
+      if (!best || f.sim_time >= best.t) best = { org: o.id, seq: f.seq, t: f.sim_time }
+    }
+  }
+  return best ? { org: best.org, seq: best.seq } : null
+}
+
+/* ---------------- shared pieces */
+
+type PanelProps = { org: Org; data: Json; run: Json; present: boolean; sel: Sel; onSelect: (seq: number) => void; onExpand: () => void }
+
+function PanelHead({ org, onExpand }: { org: Org; onExpand: () => void }) {
+  return (
+    <div className="inst-head">
+      <span className="inst-ico"><Icon name="bank" size={24} /></span>
+      <span className="inst-name">{NAME[org]}</span>
+      <span className="tag">Simulated client</span>
+      <span className="grow" />
+      <button className="icon-btn" onClick={onExpand} title={`Open ${NAME[org]} full view`} aria-label={`Expand ${NAME[org]}`}>
+        <Icon name="expand" size={17} />
+      </button>
+    </div>
+  )
+}
+
+// Feed summaries come from the simulated client; split them into from / to / amount for the table.
+function parseFeed(f: Json): { from: string; to: string; amount: string } {
+  const s: string = f.summary ?? ''
+  const amt = (v: string) => `฿${v.replace(/\.00$/, '')}`
+  let m = s.match(/^transfer ([\d,.]+) THB (\S+) -> (\S+)/)
+  if (m) return { from: m[2], to: m[3], amount: amt(m[1]) }
+  m = s.match(/^deposit credit ([\d,.]+) THB to (\S+)/)
+  if (m) return { from: 'THB deposit', to: m[2], amount: amt(m[1]) }
+  m = s.match(/^trade ([\d,.]+) THB -> ([\d.]+) USDT \((\S+)\)/)
+  if (m) return { from: `${m[3]} buys USDT`, to: '', amount: `${Number(m[2]).toFixed(2)} USDT` }
+  m = s.match(/^withdrawal request (\S+) ([\d,.]+) (\w+)/)
+  if (m) return { from: `Withdrawal ${m[1]}`, to: '', amount: `${m[2].replace(/\.00$/, '')} ${m[3]}` }
+  return { from: s, to: '', amount: '' }
+}
+
+function FeedTable({ feed, org, sel, onSelect, limit }: { feed: Json[]; org: Org; sel: Sel; onSelect: (seq: number) => void; limit?: number }) {
+  if (!feed.length) return <div className="empty">Nothing sent yet. Press Play or Step.</div>
+  const rows = limit ? feed.slice(-limit) : feed
+  return (
+    <table className="data">
+      <thead><tr><th>Time</th><th>From → To</th><th className="r">Amount</th></tr></thead>
+      <tbody>
+        {rows.map((f) => {
+          const p = parseFeed(f)
+          return (
+            <tr key={f.seq} className={`click ${sel?.org === org && sel.seq === f.seq ? 'sel' : ''}`} onClick={() => onSelect(f.seq)}>
+              <td className="num">{hm(f.sim_time)}</td>
+              <td>{p.to ? <>{p.from} → {p.to}</> : p.from}</td>
+              <td className="r">{p.amount}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+function actionsFor(rec: Json): { action: string; label: string; scope?: Json; primary?: boolean }[] {
+  const st = rec.subject_state ?? {}
+  const rid = rec.target_scope?.restriction_id
+  if (st.kind === 'withdrawal') {
+    if (st.state === 'held_for_review') return [{ action: 'release_withdrawal', label: 'Release withdrawal' }]
+    if (rec.action_type === 'RECOMMEND_RESTRICTION_REVIEW') return [
+      { action: 'hold_withdrawal', label: 'Hold withdrawal', primary: true },
+      { action: 'no_action', label: 'No action' }]
+    return [{ action: 'acknowledge', label: 'Acknowledge' }]
+  }
+  if (rec.action_type === 'RECOMMEND_RESTRICTION_REVIEW' && st.kind === 'account') return [
+    { action: 'restrict_amount', label: `Restrict ${thb(rec.target_scope.amount_minor)} only`, scope: { amount_minor: rec.target_scope.amount_minor }, primary: true },
+    { action: 'no_action', label: 'No action' }]
+  if (rid) return [
+    { action: 'release_restriction', label: 'Release this hold', scope: { restriction_id: rid }, primary: rec.action_type === 'RECOMMEND_RELEASE_REVIEW' },
+    { action: 'retain_restriction', label: 'Keep hold', scope: { restriction_id: rid } },
+    { action: 'request_information', label: 'Request more info', scope: { restriction_id: rid } }]
+  return [{ action: 'acknowledge', label: 'Acknowledge' }]
+}
+
+function canAct(rec: Json, run: Json): boolean {
+  const decided = rec.decisions.some((d: Json) => d.outcome === 'acknowledged')
+  const withdrawalHeld = rec.subject_state?.kind === 'withdrawal' && rec.subject_state.state === 'held_for_review'
+  return run.mode !== 'recorded' && rec.status !== 'superseded' && (!decided || withdrawalHeld) && rec.subject_state?.state !== 'broadcast'
+}
+
+function useDecide(rec: Json, org: Org, run: Json) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  async function decide(action: string, scope: Json = {}, reason = 'Reviewed evidence pack') {
+    setBusy(true); setErr(null)
+    try {
+      await api.post(`/v1/runs/${run.run_id}/decisions`, {
+        recommendation_id: rec.recommendation_id, actor_org: org, actor_id: `${org}-officer-1`, action,
+        target_scope: scope, reason, expected_state_version: rec.subject_state.state_version, idempotency_key: newKey(),
+      }, { 'X-Sim-Role': org })
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  return { busy, err, decide }
+}
+
+function ActionButtons({ rec, org, run, reason, extra }: { rec: Json; org: Org; run: Json; reason?: string; extra?: ReactNode }) {
+  const { busy, err, decide } = useDecide(rec, org, run)
+  if (!canAct(rec, run)) return run.mode === 'recorded' ? <div className="xs muted" style={{ marginTop: 8 }}>Recorded replay: decisions are read-only.</div> : null
+  const acts = actionsFor(rec)
+  return (
+    <>
+      <div className={extra ? 'btn-grid' : 'btn-row stretch'}>
+        {extra}
+        {acts.map((a) => (
+          <button key={a.action} className={a.primary ? 'primary' : a.action === 'release_withdrawal' ? 'outline' : ''} disabled={busy}
+            onClick={() => decide(a.action, a.scope, reason)}>{a.label}</button>
+        ))}
+      </div>
+      {err && <div className="callout bad"><Icon name="alert" size={16} />{err}</div>}
+    </>
+  )
+}
+
+function keyLine(rec: Json): string {
+  const st = rec.subject_state ?? {}
+  if (rec.action_type === 'RECOMMEND_RESTRICTION_REVIEW' && st.kind === 'account' && rec.target_scope.amount_minor !== undefined)
+    return `Traced amount remaining: ${thb(rec.target_scope.amount_minor)}`
+  return rec.rationale?.[0] ?? ''
+}
+
+// Compact inbox card: what, status, one line of why, the officer's buttons.
+function RecCard({ rec, org, run, onExpand }: { rec: Json; org: Org; run: Json; onExpand: () => void }) {
+  const [label, tone] = recStatus(rec.status)
+  const last = rec.decisions[rec.decisions.length - 1]
+  return (
+    <div className="box">
+      <div className="row">
+        <b>{shortId(rec.subject_id)} · {SHORT_ACTION[rec.action_type] ?? rec.action_type}</b>
+        <span className={`pill ${tone}`}>{label}</span>
+      </div>
+      <div className="small" style={{ marginTop: 6, color: 'var(--text-2)' }}>{keyLine(rec)}</div>
+      {last && <div className="xs muted" style={{ marginTop: 6 }}>Officer: {last.action.replace(/_/g, ' ')} → {last.outcome}</div>}
+      <ActionButtons rec={rec} org={org} run={run} extra={canAct(rec, run) ? <button onClick={onExpand}>Review evidence</button> : null} />
+    </div>
+  )
+}
+
+function LinkCards({ recs, onExpand }: { recs: Json[]; onExpand: () => void }) {
+  if (!recs.length) return null
+  return (
+    <div className="link-grid">
+      {recs.map((r) => (
+        <button key={r.recommendation_id} className="link-card" onClick={onExpand}>
+          <span className="l"><Icon name="file" size={16} />{shortId(r.subject_id)} · {SHORT_ACTION[r.action_type] ?? r.action_type}</span>
+          <Icon name="chevronRight" size={16} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const isMain = (r: Json) => r.action_type === 'RECOMMEND_RESTRICTION_REVIEW' || r.action_type === 'RECOMMEND_RELEASE_REVIEW'
+const live = (recs: Json[]) => recs.filter((r) => r.status !== 'superseded')
+
+/* ---------------- Bank A */
+
+function BankAPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
+  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
+  const recs = live(data.recommendations)
+  const pending = recs.some((r) => canAct(r, run))
+  return (
+    <div className={`card inst-col ${pending ? 'focus' : ''}`}>
+      <PanelHead org={org} onExpand={onExpand} />
+      <div className="box">
+        <div className="card-head" style={{ marginBottom: 8 }}>
+          <span className="card-title"><span className="ico"><Icon name="file" /></span>Transaction feed</span>
+          <span className="xs muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--good)' }} />Sent to Engine API</span>
+        </div>
+        <FeedTable feed={data.feed} org={org} sel={sel} onSelect={onSelect} limit={5} />
+      </div>
+      <div>
+        <div className="card-title" style={{ margin: '4px 0 10px' }}><span className="ico"><Icon name="file" /></span>Recommendation inbox</div>
+        {recs.length === 0 ? <div className="empty">No recommendations yet.</div>
+          : <div className="stack">{recs.map((r) => <RecCard key={r.recommendation_id} rec={r} org={org} run={run} onExpand={onExpand} />)}</div>}
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- Bank B */
+
+function BankBPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
+  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
+  const recs = live(data.recommendations)
+  const queue = data.review_queue.filter((q: Json) => q.status === 'active' || q.review_state !== 'released')
+  const lastQ = queue.length ? queue : data.review_queue.slice(-1)
+  const inQueue = new Set(lastQ.map((q: Json) => q.account_id))
+  // Main actionable recommendations not already covered by a review-queue card.
+  const main = recs.filter((r) => isMain(r) && !inQueue.has(r.subject_id) && canAct(r, run))
+  const others = recs.filter((r) => !main.includes(r) && !(inQueue.has(r.subject_id)))
+  const pending = lastQ.length > 0 || main.length > 0
+  return (
+    <div className={`card inst-col ${pending ? 'focus' : ''}`}>
+      <PanelHead org={org} onExpand={onExpand} />
+      {lastQ.map((q: Json) => <ReviewCard key={q.restriction_id} q={q} data={data} run={run} />)}
+      {main.map((r) => <RecCard key={r.recommendation_id} rec={r} org={org} run={run} onExpand={onExpand} />)}
+      {!pending && (
+        <div className="box">
+          <div className="card-title" style={{ marginBottom: 6 }}><span className="ico"><Icon name="list" /></span>Review queue</div>
+          <div className="empty">No restriction under review.</div>
+        </div>
+      )}
+      <LinkCards recs={others} onExpand={onExpand} />
+      {!pending && !others.length && (
+        <div className="box">
+          <div className="card-title" style={{ marginBottom: 8 }}><span className="ico"><Icon name="file" /></span>Transaction feed</div>
+          <FeedTable feed={data.feed} org={org} sel={sel} onSelect={onSelect} limit={4} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+const HIST_LABEL: Record<string, string> = {
+  restricted: 'Officer placed hold',
+  review_pending: 'Evidence received · Review pending',
+  more_info_requested: 'More information requested',
+  retained: 'Officer kept hold',
+  released: 'Hold released',
+}
+
+function ReviewCard({ q, data, run }: { q: Json; data: Json; run: Json }) {
+  const [reason, setReason] = useState('Reviewed evidence pack')
+  const acct = data.accounts.find((a: Json) => a.account_id === q.account_id)
+  const rec = [...data.recommendations].reverse().find((r: Json) => r.target_scope?.restriction_id === q.restriction_id && r.status !== 'superseded')
+  const sub = q.submissions[q.submissions.length - 1]
+  const released = q.review_state === 'released'
+  return (
+    <div className="box">
+      <div className="row" style={{ marginBottom: 10 }}>
+        <span className="card-title"><span className="ico"><Icon name="list" /></span>Review queue</span>
+        <span className={`pill ${released ? 'good' : 'amber'}`}>{q.review_state}</span>
+      </div>
+      <b>{acct?.holder_kind === 'merchant' ? 'Merchant' : 'Account'} · {shortId(q.account_id)}</b>
+      <div className="money3">
+        <div><span className="lbl">Total</span><b>{thb(q.ledger.total_minor)}</b></div>
+        <div><span className="lbl">Usable</span><b>{thb(q.ledger.available_minor)}</b></div>
+        <div><span className="lbl">Held</span><b className={q.ledger.restricted_minor ? 'amber' : ''}>{thb(q.ledger.restricted_minor)}</b></div>
+      </div>
+      {sub ? <>
+        <div className="doc-line"><Icon name="file" size={18} />
+          <div><b>Evidence {sub.submission_id}</b>
+            <div className="small muted">{sub.consistency.consistent ? 'Receipt matches amount, time and payer.' : `Does not match: ${sub.consistency.issues.join('; ')}`}</div></div>
+        </div>
+        {!released && <div className="callout amber"><Icon name="alert" size={16} />Consistency is not proof. Officer review required.</div>}
+      </> : !released && <div className="small muted" style={{ marginTop: 10 }}>Waiting for the account holder to send evidence.</div>}
+      {rec && (
+        <div className="row small" style={{ marginTop: 12 }}>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Icon name="send" size={15} />Recommendation</span>
+          <b className="teal">{SHORT_ACTION[rec.action_type]} · {rec.recommendation_id}</b>
+        </div>
+      )}
+      {rec && canAct(rec, run) && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <div className="row"><b>Officer console</b><span className="xs muted">Scope: <b className="amber">{thb(q.amount_minor)} only</b></span></div>
+          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Decision reason" style={{ width: '100%', marginTop: 8 }} />
+          <ActionButtons rec={rec} org="bank_b" run={run} reason={reason} />
+        </div>
+      )}
+      <div style={{ marginTop: 12 }}>
+        <span className="small" style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600 }}><Icon name="clock" size={15} />Audit trail</span>
+        <ul className="timeline">
+          {q.history.map((h: Json, i: number) => (
+            <li key={i}><span className="t">{hm(h.at)}</span><span>{h.state === 'restricted' ? `Officer placed ${thb(q.amount_minor)} hold` : HIST_LABEL[h.state] ?? h.state}</span></li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+/* ---------------- Exchange */
+
+function depositRefs(data: Json): Record<string, string> {
+  const refs: Record<string, string> = {}
+  for (const l of data.api_log ?? []) {
+    const evs = l.request?.events
+    if (!Array.isArray(evs)) continue
+    for (const e of evs) if (e.event_type === 'exchange_deposit' && e.reference_id) refs[e.to_ref] = e.reference_id
+  }
+  return refs
+}
+
+function verifiedCustomers(data: Json): Set<string> {
+  const out = new Set<string>()
+  for (const r of data.recommendations ?? []) for (const e of r.evidence ?? []) {
+    if (e.kind !== 'link_verified') continue
+    const m = (e.text as string).match(/X-\d+/)
+    if (m) out.add(m[0])
+  }
+  return out
+}
+
+const WD_STATE: Record<string, [string, string]> = {
+  requested: ['Pending', 'teal'],
+  pending: ['Pending review', 'teal'],
+  held_for_review: ['Held for review', 'amber'],
+  released: ['Released', 'good'],
+  broadcast: ['Broadcast on chain', 'bad'],
+}
+
+function ExchangePanel({ org, data, run, onExpand }: PanelProps) {
+  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
+  const recs = live(data.recommendations)
+  const wd = data.withdrawals[data.withdrawals.length - 1]
+  const wdRec = wd && [...recs].reverse().find((r) => r.subject_state?.kind === 'withdrawal')
+  const others = recs.filter((r) => r !== wdRec)
+  const refs = depositRefs(data)
+  const verified = verifiedCustomers(data)
+  const deposits = data.feed.filter((f: Json) => f.summary?.startsWith('deposit'))
+  const pending = !!(wdRec && canAct(wdRec, run))
+  const wdDecisions = data.decisions.filter((d: Json) => wdRec && d.recommendation_id === wdRec.recommendation_id)
+  return (
+    <div className={`card inst-col ${pending ? 'focus' : ''}`}>
+      <PanelHead org={org} onExpand={onExpand} />
+      <div className="box">
+        {!wd ? <>
+          <div className="card-title"><span className="ico"><Icon name="list" /></span>Withdrawals</div>
+          <div className="empty">No withdrawal request yet.</div>
+        </> : <>
+          <div className="card-title"><span className="ico"><Icon name="list" /></span>Withdrawal {shortId(wd.withdrawal_id)}</div>
+          <div className="row" style={{ marginTop: 10 }}>
+            <span className="big-amt">{usdt(wd.amount_minor).replace('.00 ', ' ')}</span>
+            <span className={`pill ${WD_STATE[wd.state]?.[1] ?? ''}`}>{WD_STATE[wd.state]?.[0] ?? wd.state}</span>
+          </div>
+          <div className="muted" style={{ marginBottom: 10 }}>Customer {shortId(wd.customer_id)} · {wd.chain.toUpperCase()}</div>
+          <div className="deadline"><Icon name="clock" size={17} /><span className="grow">Control deadline</span><b className="teal">{hm(wd.controllable_until)}</b></div>
+          {refs[wd.customer_id] && <div className="deadline"><Icon name="file" size={17} /><span className="grow">{verified.has(shortId(wd.customer_id)) ? 'Verified deposit reference' : 'Deposit reference'}</span><span>{refs[wd.customer_id]}</span></div>}
+          <ul className="timeline" style={{ marginTop: 10 }}>
+            <li><span className="t">{hm(wd.requested_at)}</span><span>Request received</span></li>
+            {wdDecisions.map((d: Json) => <li key={d.decision_id}><span className="t">{hm(d.recorded_at)}</span><span>Officer {d.action.replace(/_/g, ' ')} {d.outcome}</span></li>)}
+            {wd.state === 'broadcast' && <li><span className="t">-</span><span>Broadcast on chain (no longer controllable)</span></li>}
+          </ul>
+          {wdRec && <ActionButtons rec={wdRec} org={org} run={run} />}
+          {pending && <div className="xs amber" style={{ textAlign: 'center', marginTop: 8 }}>Officer decision required</div>}
+        </>}
+      </div>
+      <div className="box">
+        <div className="card-title" style={{ marginBottom: 10 }}><span className="ico"><Icon name="list" /></span>Deposit feed</div>
+        {deposits.length === 0 ? <div className="empty">No deposits yet.</div> : deposits.map((f: Json) => {
+          const p = parseFeed(f)
+          const ok = verified.has(p.to)
+          return (
+            <div key={f.seq} className="feed-ok">
+              {ok ? <Icon name="checkCircle" size={20} /> : <Icon name="clock" size={20} />}
+              <span>{p.to} · {p.amount} · {ok ? 'Verified' : 'Sent'}</span>
+            </div>
+          )
+        })}
+      </div>
+      <LinkCards recs={others} onExpand={onExpand} />
+    </div>
+  )
+}
+
+/* ---------------- API call inspector */
+
+function findCalls(log: Json[], entry: Json) {
+  const sid = entry.event_id?.split(':').pop()
+  const posted = log.find((l) => Array.isArray(l.request?.events) && l.request.events.some((e: Json) => e.source_event_id === sid))
+  const event = posted?.request.events.find((e: Json) => e.source_event_id === sid)
+  const result = posted?.response?.results?.find((r: Json) => r.source_event_id === sid)
+  const assess = log.find((l) => l.path.endsWith('/assessments') && (l.request?.subject_id === entry.subject_id || l.request?.subject_id === entry.event_id))
+  return { posted, event, result, assess }
+}
+
+function Inspector({ views, sel, present }: { views: Record<Org, Json>; sel: Sel; present: boolean }) {
+  const [showJson, setShowJson] = useState(false)
+  const data = sel ? views[sel.org] : null
+  const entry = data?.feed.find((f: Json) => f.seq === sel?.seq)
+  const head = (
+    <div className="card-head" style={{ flexWrap: 'wrap' }}>
+      <span className="card-title">
+        <span className="inst-ico" style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--navy-2)', color: '#5fd6cf' }}><Icon name="code" /></span>
+        <span className="caps">API call inspector</span>
+        {entry && <span className="small muted" style={{ fontWeight: 400 }}>Selected event <b style={{ color: 'var(--text)' }}>{shortId(entry.event_id ?? '')} · {parseFeed(entry).to ? `${parseFeed(entry).from} → ${parseFeed(entry).to}` : parseFeed(entry).from}</b></span>}
+      </span>
+      <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        {entry && !present && <button onClick={() => setShowJson(!showJson)} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="code" size={15} />{showJson ? 'Hide JSON' : 'View JSON'}</button>}
+        <span className="xs muted">Transaction ranking score, not a probability.</span>
+      </span>
+    </div>
+  )
+  if (!entry || !data) return <>{head}<div className="empty">Click any transaction row to see the call it made to the Engine API.</div></>
+  const { posted, event, result, assess } = findCalls(data.api_log, entry)
+  const res = assess?.response
+  const recs = data.recommendations ?? []
+  const decisions = data.decisions ?? []
+  const steps = [
+    { label: 'Evidence', icon: 'file', on: true, cls: '' },
+    { label: 'Recommendation', icon: 'graph', on: recs.length > 0, cls: 'teal' },
+    { label: 'Officer decision', icon: 'user', on: decisions.length > 0, cls: 'amber' },
+    { label: 'Ledger update', icon: 'database', on: decisions.some((d: Json) => d.outcome === 'acknowledged'), cls: 'navy' },
+  ]
+  const p = parseFeed(entry)
+  return (
+    <>
+      {head}
+      <div className="inspector">
+        <div className="pane">
+          <h4>Request · <span style={{ fontWeight: 500 }}>{event?.event_type?.endsWith('transfer') ? `Assess ${p.amount} transfer` : (event?.event_type ?? 'event').replace(/_/g, ' ')}</span></h4>
+          <dl className="kv">
+            <dt>Event</dt><dd>{event?.source_event_id ?? shortId(entry.event_id ?? '')}</dd>
+            {event?.from_ref && <><dt>From</dt><dd>{shortId(event.from_ref)}</dd></>}
+            {event?.to_ref && <><dt>To</dt><dd>{shortId(event.to_ref)}</dd></>}
+            <dt>Occurred</dt><dd>{time(event?.occurred_at)}</dd>
+            <dt>Available</dt><dd>{time(event?.available_at ?? entry.sim_time)}</dd>
+          </dl>
+        </div>
+        <div className="pane">
+          <h4>Response · <span className={result?.status === 'accepted' || assess ? 'good' : 'amber'}>{assess ? 'Assessed' : result?.status ?? entry.status}</span></h4>
+          <dl className="kv">
+            {res ? <>
+              <dt>Ranking score</dt><dd><b>{res.risk_score === null ? `not scored (${res.score_status.replace(/_/g, ' ')})` : res.risk_score.toFixed(2)}</b></dd>
+              <dt>Case</dt><dd>{res.case_id ?? 'none'}</dd>
+              <dt>Recommendations</dt><dd>{res.recommendations.length ? res.recommendations.map((r: Json) => `${r.id} ${SHORT_ACTION[r.action_type] ?? ''}`).join(', ') : 'none'}</dd>
+            </> : <><dt>Assessment</dt><dd>not requested for this event type</dd></>}
+            {event?.reference_id && <><dt>Reference</dt><dd>{event.reference_id}</dd></>}
+            <dt>Latency</dt><dd>{[posted?.latency_ms, assess?.latency_ms].filter((v) => v !== undefined).map((v) => `${v} ms`).join(' + ') || '-'}</dd>
+          </dl>
+        </div>
+        <div className="flow">
+          {steps.map((s, i) => (
+            <div key={s.label} style={{ display: 'contents' }}>
+              {i > 0 && <span className="arrow">⟶</span>}
+              <div className="step"><span className={`dot ${s.on ? s.cls : 'off'}`}><Icon name={s.icon} size={24} /></span>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {showJson && <pre className="json">{JSON.stringify([posted, assess].filter(Boolean), null, 2)}</pre>}
+    </>
+  )
+}
+
+/* ---------------- Full-screen institution view */
+
+function Expanded({ org, data, views, run, present, sel, onSelect, onClose }: {
+  org: Org; data: Json; views: Record<Org, Json>; run: Json; present: boolean; sel: Sel; onSelect: (seq: number) => void; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = '' }
+  }, [onClose])
+  const recs = [...data.recommendations].reverse()
+  const open = recs.filter((r) => canAct(r, run)).length
+  const lastSeq = data.feed.length ? data.feed[data.feed.length - 1].seq : null
+  const inspect: Sel = sel ?? (lastSeq !== null ? { org, seq: lastSeq } : null)
+  const restricted = data.accounts.reduce((s: number, a: Json) => s + (a.ledger?.restricted_minor ?? 0), 0)
+  const stats = org === 'exchange'
+    ? [['Customers', data.customers.length], ['Withdrawals', data.withdrawals.length], ['Awaiting officer', open], ['Decisions recorded', data.decisions.length]]
+    : [['Accounts', data.accounts.length], ['Amount held', thb(restricted)], ['Awaiting officer', open], ['Decisions recorded', data.decisions.length]]
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${NAME[org]} full view`}>
+        <div className="sheet-head">
+          <span className="inst-ico"><Icon name="bank" size={24} /></span>
+          <span className="inst-name">{NAME[org]}</span>
+          <span className="tag">Simulated client</span>
+          <span className="sub">Everything this institution's system sees and sent at {time(run.clock.now)}</span>
+          <span className="grow" />
+          <button className="icon-btn" onClick={onClose} aria-label="Close full view" title="Close (Esc)"><Icon name="close" size={20} /></button>
+        </div>
+        <div className="sheet-body">
+          <div className="stat-row">
+            {stats.map(([l, v]) => <div key={l as string} className="stat"><span className="lbl">{l}</span><b>{v}</b></div>)}
+          </div>
+          <div className="sheet-grid">
+            <div className="stack">
+              {org === 'bank_b' && data.review_queue.map((q: Json) => <ReviewCard key={q.restriction_id} q={q} data={data} run={run} />)}
+              <div className="card">
+                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="file" /></span>Recommendations</span><span className="sub">{recs.length} received</span></div>
+                {recs.length === 0 ? <div className="empty">No recommendations yet.</div> : recs.map((r) => <RecFull key={r.recommendation_id} rec={r} org={org} run={run} />)}
+              </div>
+            </div>
+            <div className="stack">
+              <Holdings org={org} data={data} />
+              <div className="card">
+                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="file" /></span>Transaction feed</span><span className="sub">click a row to inspect its API call</span></div>
+                <FeedTable feed={data.feed} org={org} sel={inspect} onSelect={onSelect} />
+              </div>
+              <div className="card"><Inspector views={views} sel={inspect} present={present} /></div>
+              <div className="card">
+                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="code" /></span>API calls</span><span className="sub">{data.api_log.length} calls</span></div>
+                <table className="data">
+                  <thead><tr><th>Sim time</th><th>Call</th><th>Status</th><th className="r">Latency</th></tr></thead>
+                  <tbody>{[...data.api_log].reverse().map((l: Json) => (
+                    <tr key={l.seq}><td className="num">{time(l.sim_time)}</td><td><code>{l.method} {l.path.replace(/\/v1\/runs\/[^/]+/, '')}</code></td>
+                      <td><span className={`pill ${l.status_code < 300 ? 'good' : 'bad'}`}>{l.status_code}</span></td><td className="r">{l.latency_ms} ms</td></tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Holdings({ org, data }: { org: Org; data: Json }) {
+  if (org === 'exchange') return (
+    <div className="card">
+      <div className="card-head"><span className="card-title"><span className="ico"><Icon name="wallet" /></span>Customers and withdrawals</span></div>
+      <table className="data">
+        <thead><tr><th>Customer</th><th className="r">THB</th><th className="r">USDT</th></tr></thead>
+        <tbody>{data.customers.map((c: Json) => <tr key={c.customer_id}><td>{shortId(c.customer_id)}</td><td className="r">{thb(c.balances.THB)}</td><td className="r">{usdt(c.balances.USDT)}</td></tr>)}</tbody>
+      </table>
+      {data.withdrawals.length > 0 && <table className="data" style={{ marginTop: 12 }}>
+        <thead><tr><th>Withdrawal</th><th>Customer</th><th className="r">Amount</th><th>State</th><th>Deadline</th></tr></thead>
+        <tbody>{data.withdrawals.map((w: Json) => <tr key={w.withdrawal_id}><td>{shortId(w.withdrawal_id)}</td><td>{shortId(w.customer_id)}</td><td className="r">{usdt(w.amount_minor)}</td>
+          <td><span className={`pill ${WD_STATE[w.state]?.[1] ?? ''}`}>{WD_STATE[w.state]?.[0] ?? w.state}</span></td><td>{hm(w.controllable_until)}</td></tr>)}</tbody>
+      </table>}
+    </div>
+  )
+  return (
+    <div className="card">
+      <div className="card-head"><span className="card-title"><span className="ico"><Icon name="wallet" /></span>Accounts in this bank's ledger</span></div>
+      <table className="data">
+        <thead><tr><th>Account</th><th>Holder</th><th className="r">Total</th><th className="r">Held</th><th className="r">Usable</th></tr></thead>
+        <tbody>{data.accounts.map((a: Json) => (
+          <tr key={a.account_id}><td>{shortId(a.account_id)}</td><td className="small">{a.holder_name}</td><td className="r">{thb(a.ledger.total_minor)}</td>
+            <td className={`r ${a.ledger.restricted_minor ? 'amber' : ''}`}>{thb(a.ledger.restricted_minor)}</td><td className="r">{thb(a.ledger.available_minor)}</td></tr>
+        ))}</tbody>
+      </table>
+    </div>
+  )
+}
+
+function RecFull({ rec, org, run }: { rec: Json; org: Org; run: Json }) {
+  const [reason, setReason] = useState('Reviewed evidence pack')
+  const [label, tone] = recStatus(rec.status)
+  const st = rec.subject_state ?? {}
+  return (
+    <div className="rec-full" style={{ opacity: rec.status === 'superseded' ? 0.55 : 1 }}>
+      <div className="row">
+        <b>{rec.recommendation_id} · {ACTION_LABEL[rec.action_type]}</b>
+        <span className={`pill ${tone}`}>{label}</span>
+      </div>
+      <div className="small muted" style={{ marginTop: 4 }}>
+        {rec.subject_display}{rec.priority && <> · priority {rec.priority}</>}
+        {rec.target_scope.amount_minor !== undefined && <> · scope {money(rec.target_scope.amount_minor, rec.target_scope.asset)}</>}
+        {rec.expires_at && <> · deadline {time(rec.expires_at)}</>}
+      </div>
+      {st.kind === 'account' && <div className="small" style={{ marginTop: 6 }}>Your system: total {thb(st.total_minor)} · held {thb(st.restricted_minor)} · usable {thb(st.available_minor)}</div>}
+      {st.kind === 'withdrawal' && <div className="small" style={{ marginTop: 6 }}>Your system: withdrawal {st.state.replace(/_/g, ' ')}</div>}
+      <div className="section-label">Why</div>
+      <ul style={{ marginTop: 0 }}>{rec.rationale.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
+      <div className="section-label">Evidence ({rec.evidence.length})</div>
+      <ul style={{ marginTop: 0 }}>{rec.evidence.map((e: Json, i: number) => <li key={i}><span className="ev-kind">{e.kind.replace(/_/g, ' ')}</span>{e.text}</li>)}</ul>
+      {rec.decisions.length > 0 && <>
+        <div className="section-label">Officer decisions</div>
+        <ul style={{ marginTop: 0 }}>{rec.decisions.map((d: Json) => <li key={d.decision_id ?? d.idempotency_key}>{hm(d.recorded_at)} · {d.action.replace(/_/g, ' ')} → <b>{d.outcome}</b> ({d.outcome_detail})</li>)}</ul>
+      </>}
+      {canAct(rec, run) && <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Decision reason" style={{ width: '100%', marginTop: 10 }} />}
+      <ActionButtons rec={rec} org={org} run={run} reason={reason} />
+    </div>
+  )
+}

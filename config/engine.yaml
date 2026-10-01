@@ -1,0 +1,32 @@
+# Which model the engine uses. Switch here; the UI reads the model identity from the API.
+#
+#   active_model: {kind: rules}                                         # default demo rules
+#   active_model: {kind: bundle, path: artifacts/bundles/<run_id>, arm: G1}   # experiment model
+active_model:
+  kind: rules
+
+# Bundle statuses that may be loaded. Add "dev_fixture" only for plumbing tests.
+allow_bundle_statuses: [completed, inconclusive]
+
+# R0-demo: hand-set thresholds for the demo, NOT fitted on data. Replace with the
+# experiment's fitted R0 or a LightGBM arm when the bundle is ready.
+rules:
+  model_id: R0-demo
+  arm: R0
+  version: "demo-1"
+  task_id: sim_transaction_risk_demo
+  feature_version: sim-local-v0
+  components:
+    - {feature: pass_through_ratio_24h, op: ">=", value: 0.8, weight: 0.35, label: "most of recent inflow sent onward"}
+    - {feature: minutes_since_src_last_inbound, op: "<=", value: 30, weight: 0.20, label: "sent soon after receiving"}
+    - {feature: src_account_age_hours, op: "<=", value: 168, weight: 0.15, label: "sender account seen for under 7 days"}
+    - {feature: src_unique_out_counterparties_1h, op: ">=", value: 3, weight: 0.15, label: "fan-out to 3+ counterparties in 1h"}
+    - {feature: dst_is_exchange_settlement, op: "==", value: 1, weight: 0.15, label: "destination is an exchange settlement account"}
+
+results:
+  bundles_dir: artifacts/bundles
+  template_csv: ../04-prototype-poc/experiment-results.template.csv
+  include_dev_fixtures: false
+
+audit_db: artifacts/runtime/audit.sqlite
+recordings_dir: artifacts/recordings

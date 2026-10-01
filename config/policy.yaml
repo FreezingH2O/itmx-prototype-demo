@@ -1,0 +1,19 @@
+# Recommendation policy (demo-policy-v1). Recommendations are advice, never account commands.
+policy_version: demo-policy-v1
+
+trace:
+  lookback_hours: 24          # origin account outflows considered before the signal
+  onward_window_hours: 6      # how long after receipt onward transfers count as the same flow
+  max_hops: 4
+
+merchant_context:
+  min_unique_payers_30d: 10   # "established receiving pattern" context, not a verdict
+  typical_quantile: 0.9
+
+# Score threshold for REVIEW_PRIORITY "high". null = model score is shown as evidence but
+# does not change priority. Set from the bundle's validation operating point, never by hand.
+score_priority_threshold: null
+
+evidence_check:
+  amount_must_match: true
+  max_time_diff_minutes: 10

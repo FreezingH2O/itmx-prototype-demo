@@ -1,0 +1,60 @@
+# ---------- OS / editor ----------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+*.md
+!README.md
+
+# ---------- Secrets / env ----------
+.env
+.env.*
+!.env.example
+*.local
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+mlruns/
+
+# ---------- Data (keep folder placeholders) ----------
+data/raw/*
+data/processed/*
+!data/**/.gitkeep
+
+# ---------- Generated artifacts ----------
+artifacts/runtime/
+artifacts/bundles/*
+!artifacts/bundles/.gitkeep
+*.sqlite
+*.sqlite-journal
+
+# ---------- Frontend (demo/web) ----------
+demo/web/node_modules/
+demo/web/dist/
+demo/web/dist-ssr/
+
+# ---------- Markdown docs (keep only README files) ----------
+*.md
+!README.md
+
+# ---------- Logs ----------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

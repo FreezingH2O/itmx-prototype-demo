@@ -1,5 +1,5 @@
-# Keep the Vercel backend function small: only src/, config/, artifacts/recordings and data/scenarios are needed
-demo/
+# Keep the Vercel backend function small. Vercel applies this file to every project
+# built from this repo, so demo/ must stay (the frontend project builds from demo/web).
 docs/
 notebooks/
 tests/

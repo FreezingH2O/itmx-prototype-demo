@@ -1,6 +1,10 @@
 // Thin client for the Engine API. Every page reads through these calls.
 export type Json = any // eslint-disable-line @typescript-eslint/no-explicit-any
 
+// Engine API origin. Empty in local dev (Vite proxies /v1); set VITE_API_BASE for deploys.
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/+$/, '')
+export const apiUrl = (path: string) => `${API_BASE}${path}`
+
 export class ApiError extends Error {
   status: number
   body: Json
@@ -12,7 +16,7 @@ export class ApiError extends Error {
 }
 
 async function call(method: string, path: string, body?: Json, headers: Record<string, string> = {}) {
-  const r = await fetch(path, {
+  const r = await fetch(apiUrl(path), {
     method,
     headers: { 'Content-Type': 'application/json', ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),

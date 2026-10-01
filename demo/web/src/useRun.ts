@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type Json } from './api'
+import { api, apiUrl, type Json } from './api'
 
 // One run shared by every tab: the run id lives in localStorage, and each tab follows
 // the server's SSE stream so all views show the same case, time and state version.
@@ -29,7 +29,7 @@ export function useRun() {
 
   const attach = useCallback((id: string) => {
     esRef.current?.close()
-    const es = new EventSource(`/v1/runs/${id}/stream`)
+    const es = new EventSource(apiUrl(`/v1/runs/${id}/stream`))
     es.onopen = () => setConnected(true)
     es.onerror = () => setConnected(false)
     es.onmessage = (m) => {

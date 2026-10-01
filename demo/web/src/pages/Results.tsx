@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, type Json } from '../api'
+import { api, apiUrl, type Json } from '../api'
 import { Icon } from '../icons'
 
 type Props = { run: Json; version: number; present: boolean }
@@ -80,7 +80,7 @@ export default function Results({ present }: Props) {
         {bundle?.comparisons?.length > 0 && <Comparisons rows={bundle.comparisons} />}
         {bundle?.figures?.length > 0 && !present && (
           <div className="card"><div className="card-head"><span className="caps">Exported figures</span></div>
-            <div className="grid cols-2">{bundle.figures.map((f: string) => <img key={f} alt={f} style={{ maxWidth: '100%' }} src={`/v1/experiments/${bundle.id}/figures/${f}`} />)}</div></div>
+            <div className="grid cols-2">{bundle.figures.map((f: string) => <img key={f} alt={f} style={{ maxWidth: '100%' }} src={apiUrl(`/v1/experiments/${bundle.id}/figures/${f}`)} />)}</div></div>
         )}
 
         <div className="results-bottom">

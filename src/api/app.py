@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 
+from src import settings
 from src.api import projections
 from src.api.runtime import ROOT, ReadOnlyRun, Runtime
 from src.artifacts.bundle import list_bundles, load_bundle, template_rows
@@ -35,7 +36,7 @@ from src.policy import evidence_check
 from src.sim import scenarios
 from src.sim.institutions import SimRejected, apply_decision, receive_evidence
 
-runtime = Runtime()
+runtime = Runtime(audit_path=settings.AUDIT_DB)
 
 
 @asynccontextmanager
@@ -46,8 +47,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Bank x Crypto Risk Engine API (synthetic PoC)", version=SCHEMA_VERSION, lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-                   allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS,
+                   allow_origin_regex=settings.CORS_ORIGIN_REGEX, allow_methods=["*"], allow_headers=["*"])
 runtime.app = app
 
 

@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 export function money(minor: number | null | undefined, asset = 'THB'): string {
   if (minor === null || minor === undefined) return '-'
   if (asset === 'USDT') return `${(minor / 1_000_000).toLocaleString('en-US', { maximumFractionDigits: 2 })} USDT`
@@ -11,7 +13,7 @@ export function baht(minor: number | null | undefined): string {
 
 // bank_c -> Bank C, exchange -> Exchange
 export function instName(org: string): string {
-  return org === 'exchange' ? 'Exchange' : org.replace(/^bank_(\w)$/, (_, c: string) => `Bank ${c.toUpperCase()}`)
+  return org === 'exchange' ? t('Exchange') : org.replace(/^bank_(\w)$/, (_, c: string) => t('Bank {c}', { c: c.toUpperCase() }))
 }
 
 export function time(iso: string | null | undefined): string {
@@ -56,7 +58,8 @@ const REC_STATUS: Record<string, [string, string]> = {
   expired: ['Expired', ''],
 }
 export function recStatus(s: string): [string, string] {
-  return REC_STATUS[s] ?? [s, '']
+  const r = REC_STATUS[s]
+  return r ? [t(r[0]), r[1]] : [s, '']
 }
 
 export const SHORT_ACTION: Record<string, string> = {

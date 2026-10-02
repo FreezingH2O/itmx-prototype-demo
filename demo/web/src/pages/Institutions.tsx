@@ -3,6 +3,7 @@ import { api, newKey, type Json } from '../api'
 import { ACTION_LABEL, SHORT_ACTION, hm, instName, money, recStatus, shortId, thb, time, usdt } from '../format'
 import { Icon } from '../icons'
 import { useViews } from '../useRun'
+import { t } from '../i18n'
 
 type Props = { run: Json; version: number; present: boolean; compact?: boolean }
 type Org = string
@@ -31,8 +32,8 @@ export default function Institutions({ run, version, present, compact }: Props) 
       {!compact && (
         <div className="page-head">
           <div>
-            <div className="page-title"><h1>Institutions</h1><span className="tag lg">Simulated clients</span></div>
-            <p>Recommendations inform officers. Only acknowledged decisions change balances.</p>
+            <div className="page-title"><h1>{t('Institutions')}</h1><span className="tag lg">{t('Simulated clients')}</span></div>
+            <p>{t('Recommendations inform officers. Only acknowledged decisions change balances.')}</p>
           </div>
         </div>
       )}
@@ -47,7 +48,7 @@ export default function Institutions({ run, version, present, compact }: Props) 
           </>}
       </div>
       {!compact && <div className="card" style={{ marginTop: 16 }}><Inspector views={views} sel={active} present={present} /></div>}
-      {!compact && <div className="foot-note">Prototype design · Synthetic data</div>}
+      {!compact && <div className="foot-note">{t('Prototype design · Synthetic data')}</div>}
       {expanded && views[expanded] && (
         <Expanded org={expanded} data={views[expanded]} views={views} orgs={orgs} run={run} present={present}
           sel={active?.org === expanded ? active : null} onSelect={pick(expanded)} onClose={() => setExpanded(null)} />
@@ -73,7 +74,7 @@ function Workload({ orgs, views, run }: { orgs: Org[]; views: Record<Org, Json>;
   const total = orgs.reduce((s, o) => s + waiting(o), 0)
   return (
     <div className="stat-row" style={{ marginBottom: 16 }}>
-      <div className="stat"><span className="lbl">Awaiting an officer</span><b className={total ? 'amber' : ''}>{total}</b></div>
+      <div className="stat"><span className="lbl">{t('Awaiting an officer')}</span><b className={total ? 'amber' : ''}>{total}</b></div>
       {orgs.map((o) => <div key={o} className="stat"><span className="lbl">{NAME(o)}</span><b>{waiting(o)}</b></div>)}
     </div>
   )
@@ -84,7 +85,7 @@ function Workload({ orgs, views, run }: { orgs: Org[]; views: Record<Org, Json>;
 type PanelProps = { org: Org; data: Json; run: Json; present: boolean; sel: Sel; onSelect: (seq: number) => void; onExpand: () => void; limit?: number }
 
 function More({ n, onExpand }: { n: number; onExpand: () => void }) {
-  return n > 0 ? <button className="ghost small" onClick={onExpand} style={{ marginTop: 6 }}>+{n} more in full view</button> : null
+  return n > 0 ? <button className="ghost small" onClick={onExpand} style={{ marginTop: 6 }}>{t('+{n} more in full view', { n })}</button> : null
 }
 
 function PanelHead({ org, onExpand }: { org: Org; onExpand: () => void }) {
@@ -92,9 +93,9 @@ function PanelHead({ org, onExpand }: { org: Org; onExpand: () => void }) {
     <div className="inst-head">
       <span className="inst-ico"><Icon name="bank" size={24} /></span>
       <span className="inst-name">{NAME(org)}</span>
-      <span className="tag">Simulated client</span>
+      <span className="tag">{t('Simulated client')}</span>
       <span className="grow" />
-      <button className="icon-btn" onClick={onExpand} title={`Open ${NAME(org)} full view`} aria-label={`Expand ${NAME(org)}`}>
+      <button className="icon-btn" onClick={onExpand} title={t('Open {n} full view', { n: NAME(org) })} aria-label={t('Expand {n}', { n: NAME(org) })}>
         <Icon name="expand" size={17} />
       </button>
     </div>
@@ -108,20 +109,20 @@ function parseFeed(f: Json): { from: string; to: string; amount: string } {
   let m = s.match(/^transfer ([\d,.]+) THB (\S+) -> (\S+)/)
   if (m) return { from: m[2], to: m[3], amount: amt(m[1]) }
   m = s.match(/^deposit credit ([\d,.]+) THB to (\S+)/)
-  if (m) return { from: 'THB deposit', to: m[2], amount: amt(m[1]) }
+  if (m) return { from: t('THB deposit'), to: m[2], amount: amt(m[1]) }
   m = s.match(/^trade ([\d,.]+) THB -> ([\d.]+) USDT \((\S+)\)/)
-  if (m) return { from: `${m[3]} buys USDT`, to: '', amount: `${Number(m[2]).toFixed(2)} USDT` }
+  if (m) return { from: t('{c} buys USDT', { c: m[3] }), to: '', amount: `${Number(m[2]).toFixed(2)} USDT` }
   m = s.match(/^withdrawal request (\S+) ([\d,.]+) (\w+)/)
-  if (m) return { from: `Withdrawal ${m[1]}`, to: '', amount: `${m[2].replace(/\.00$/, '')} ${m[3]}` }
+  if (m) return { from: t('Withdrawal {id}', { id: m[1] }), to: '', amount: `${m[2].replace(/\.00$/, '')} ${m[3]}` }
   return { from: s, to: '', amount: '' }
 }
 
 function FeedTable({ feed, org, sel, onSelect, limit }: { feed: Json[]; org: Org; sel: Sel; onSelect: (seq: number) => void; limit?: number }) {
-  if (!feed.length) return <div className="empty">Nothing sent yet. Press Play or Step.</div>
+  if (!feed.length) return <div className="empty">{t('Nothing sent yet. Press Play or Step.')}</div>
   const rows = limit ? feed.slice(-limit) : feed
   return (
     <table className="data">
-      <thead><tr><th>Time</th><th>From → To</th><th className="r">Amount</th></tr></thead>
+      <thead><tr><th>{t('Time')}</th><th>{t('From → To')}</th><th className="r">{t('Amount')}</th></tr></thead>
       <tbody>
         {rows.map((f) => {
           const p = parseFeed(f)
@@ -142,20 +143,20 @@ function actionsFor(rec: Json): { action: string; label: string; scope?: Json; p
   const st = rec.subject_state ?? {}
   const rid = rec.target_scope?.restriction_id
   if (st.kind === 'withdrawal') {
-    if (st.state === 'held_for_review') return [{ action: 'release_withdrawal', label: 'Release withdrawal' }]
+    if (st.state === 'held_for_review') return [{ action: 'release_withdrawal', label: t('Release withdrawal') }]
     if (rec.action_type === 'RECOMMEND_RESTRICTION_REVIEW') return [
-      { action: 'hold_withdrawal', label: 'Hold withdrawal', primary: true },
-      { action: 'no_action', label: 'No action' }]
-    return [{ action: 'acknowledge', label: 'Acknowledge' }]
+      { action: 'hold_withdrawal', label: t('Hold withdrawal'), primary: true },
+      { action: 'no_action', label: t('No action') }]
+    return [{ action: 'acknowledge', label: t('Acknowledge') }]
   }
   if (rec.action_type === 'RECOMMEND_RESTRICTION_REVIEW' && st.kind === 'account') return [
-    { action: 'restrict_amount', label: `Restrict ${thb(rec.target_scope.amount_minor)} only`, scope: { amount_minor: rec.target_scope.amount_minor }, primary: true },
-    { action: 'no_action', label: 'No action' }]
+    { action: 'restrict_amount', label: t('Restrict {amt} only', { amt: thb(rec.target_scope.amount_minor) }), scope: { amount_minor: rec.target_scope.amount_minor }, primary: true },
+    { action: 'no_action', label: t('No action') }]
   if (rid) return [
-    { action: 'release_restriction', label: 'Release this hold', scope: { restriction_id: rid }, primary: rec.action_type === 'RECOMMEND_RELEASE_REVIEW' },
-    { action: 'retain_restriction', label: 'Keep hold', scope: { restriction_id: rid } },
-    { action: 'request_information', label: 'Request more info', scope: { restriction_id: rid } }]
-  return [{ action: 'acknowledge', label: 'Acknowledge' }]
+    { action: 'release_restriction', label: t('Release this hold'), scope: { restriction_id: rid }, primary: rec.action_type === 'RECOMMEND_RELEASE_REVIEW' },
+    { action: 'retain_restriction', label: t('Keep hold'), scope: { restriction_id: rid } },
+    { action: 'request_information', label: t('Request more info'), scope: { restriction_id: rid } }]
+  return [{ action: 'acknowledge', label: t('Acknowledge') }]
 }
 
 function canAct(rec: Json, run: Json): boolean {
@@ -181,7 +182,7 @@ function useDecide(rec: Json, org: Org, run: Json) {
 
 function ActionButtons({ rec, org, run, reason, extra }: { rec: Json; org: Org; run: Json; reason?: string; extra?: ReactNode }) {
   const { busy, err, decide } = useDecide(rec, org, run)
-  if (!canAct(rec, run)) return run.mode === 'recorded' ? <div className="xs muted" style={{ marginTop: 8 }}>Recorded replay: decisions are read-only.</div> : null
+  if (!canAct(rec, run)) return run.mode === 'recorded' ? <div className="xs muted" style={{ marginTop: 8 }}>{t('Recorded replay: decisions are read-only.')}</div> : null
   const acts = actionsFor(rec)
   return (
     <>
@@ -200,7 +201,7 @@ function ActionButtons({ rec, org, run, reason, extra }: { rec: Json; org: Org; 
 function keyLine(rec: Json): string {
   const st = rec.subject_state ?? {}
   if (rec.action_type === 'RECOMMEND_RESTRICTION_REVIEW' && st.kind === 'account' && rec.target_scope.amount_minor !== undefined)
-    return `Traced amount remaining: ${thb(rec.target_scope.amount_minor)}`
+    return t('Traced amount remaining: {amt}', { amt: thb(rec.target_scope.amount_minor) })
   return rec.rationale?.[0] ?? ''
 }
 
@@ -211,12 +212,12 @@ function RecCard({ rec, org, run, onExpand }: { rec: Json; org: Org; run: Json; 
   return (
     <div className="box">
       <div className="row">
-        <b>{shortId(rec.subject_id)} · {SHORT_ACTION[rec.action_type] ?? rec.action_type}</b>
+        <b>{shortId(rec.subject_id)} · {t(SHORT_ACTION[rec.action_type] ?? rec.action_type)}</b>
         <span className={`pill ${tone}`}>{label}</span>
       </div>
       <div className="small" style={{ marginTop: 6, color: 'var(--text-2)' }}>{keyLine(rec)}</div>
-      {last && <div className="xs muted" style={{ marginTop: 6 }}>Officer: {last.action.replace(/_/g, ' ')} → {last.outcome}</div>}
-      <ActionButtons rec={rec} org={org} run={run} extra={canAct(rec, run) ? <button onClick={onExpand}>Review evidence</button> : null} />
+      {last && <div className="xs muted" style={{ marginTop: 6 }}>{t('Officer')}: {t(last.action.replace(/_/g, ' '))} → {t(last.outcome)}</div>}
+      <ActionButtons rec={rec} org={org} run={run} extra={canAct(rec, run) ? <button onClick={onExpand}>{t('Review evidence')}</button> : null} />
     </div>
   )
 }
@@ -227,7 +228,7 @@ function LinkCards({ recs, onExpand }: { recs: Json[]; onExpand: () => void }) {
     <div className="link-grid">
       {recs.map((r) => (
         <button key={r.recommendation_id} className="link-card" onClick={onExpand}>
-          <span className="l"><Icon name="file" size={16} />{shortId(r.subject_id)} · {SHORT_ACTION[r.action_type] ?? r.action_type}</span>
+          <span className="l"><Icon name="file" size={16} />{shortId(r.subject_id)} · {t(SHORT_ACTION[r.action_type] ?? r.action_type)}</span>
           <Icon name="chevronRight" size={16} />
         </button>
       ))}
@@ -241,7 +242,7 @@ const live = (recs: Json[]) => recs.filter((r) => r.status !== 'superseded')
 /* ---------------- Bank A */
 
 function BankAPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
-  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
+  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">{t('Loading…')}</div></div>
   const recs = live(data.recommendations)
   const pending = recs.some((r) => canAct(r, run))
   return (
@@ -249,14 +250,14 @@ function BankAPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
       <PanelHead org={org} onExpand={onExpand} />
       <div className="box">
         <div className="card-head" style={{ marginBottom: 8 }}>
-          <span className="card-title"><span className="ico"><Icon name="file" /></span>Transaction feed</span>
-          <span className="xs muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--good)' }} />Sent to Engine API</span>
+          <span className="card-title"><span className="ico"><Icon name="file" /></span>{t('Transaction feed')}</span>
+          <span className="xs muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--good)' }} />{t('Sent to Engine API')}</span>
         </div>
         <FeedTable feed={data.feed} org={org} sel={sel} onSelect={onSelect} limit={5} />
       </div>
       <div>
-        <div className="card-title" style={{ margin: '4px 0 10px' }}><span className="ico"><Icon name="file" /></span>Recommendation inbox</div>
-        {recs.length === 0 ? <div className="empty">No recommendations yet.</div>
+        <div className="card-title" style={{ margin: '4px 0 10px' }}><span className="ico"><Icon name="file" /></span>{t('Recommendation inbox')}</div>
+        {recs.length === 0 ? <div className="empty">{t('No recommendations yet.')}</div>
           : <div className="stack">{recs.map((r) => <RecCard key={r.recommendation_id} rec={r} org={org} run={run} onExpand={onExpand} />)}</div>}
       </div>
     </div>
@@ -266,7 +267,7 @@ function BankAPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
 /* ---------------- Bank B */
 
 function BankBPanel({ org, data, run, sel, onSelect, onExpand, limit }: PanelProps) {
-  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
+  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">{t('Loading…')}</div></div>
   const recs = live(data.recommendations)
   const queue = data.review_queue.filter((q: Json) => q.status === 'active' || q.review_state !== 'released')
   const lastQ = queue.length ? queue : data.review_queue.slice(-1)
@@ -284,15 +285,15 @@ function BankBPanel({ org, data, run, sel, onSelect, onExpand, limit }: PanelPro
       {cap(main).map((r) => <RecCard key={r.recommendation_id} rec={r} org={org} run={run} onExpand={onExpand} />)}
       {!pending && (
         <div className="box">
-          <div className="card-title" style={{ marginBottom: 6 }}><span className="ico"><Icon name="list" /></span>Review queue</div>
-          <div className="empty">No restriction under review.</div>
+          <div className="card-title" style={{ marginBottom: 6 }}><span className="ico"><Icon name="list" /></span>{t('Review queue')}</div>
+          <div className="empty">{t('No restriction under review.')}</div>
         </div>
       )}
       <LinkCards recs={cap(others, limit === undefined ? undefined : limit * 2)} onExpand={onExpand} />
       <More n={hidden} onExpand={onExpand} />
       {!pending && !others.length && (
         <div className="box">
-          <div className="card-title" style={{ marginBottom: 8 }}><span className="ico"><Icon name="file" /></span>Transaction feed</div>
+          <div className="card-title" style={{ marginBottom: 8 }}><span className="ico"><Icon name="file" /></span>{t('Transaction feed')}</div>
           <FeedTable feed={data.feed} org={org} sel={sel} onSelect={onSelect} limit={4} />
         </div>
       )}
@@ -309,7 +310,7 @@ const HIST_LABEL: Record<string, string> = {
 }
 
 function ReviewCard({ q, data, org, run }: { q: Json; data: Json; org: Org; run: Json }) {
-  const [reason, setReason] = useState('Reviewed evidence pack')
+  const [reason, setReason] = useState(() => t('Reviewed evidence pack'))
   const acct = data.accounts.find((a: Json) => a.account_id === q.account_id)
   const rec = [...data.recommendations].reverse().find((r: Json) => r.target_scope?.restriction_id === q.restriction_id && r.status !== 'superseded')
   const sub = q.submissions[q.submissions.length - 1]
@@ -317,40 +318,40 @@ function ReviewCard({ q, data, org, run }: { q: Json; data: Json; org: Org; run:
   return (
     <div className="box">
       <div className="row" style={{ marginBottom: 10 }}>
-        <span className="card-title"><span className="ico"><Icon name="list" /></span>Review queue</span>
-        <span className={`pill ${released ? 'good' : 'amber'}`}>{q.review_state}</span>
+        <span className="card-title"><span className="ico"><Icon name="list" /></span>{t('Review queue')}</span>
+        <span className={`pill ${released ? 'good' : 'amber'}`}>{t(q.review_state.replace(/_/g, ' '))}</span>
       </div>
-      <b>{acct?.holder_kind === 'merchant' ? 'Merchant' : 'Account'} · {shortId(q.account_id)}</b>
+      <b>{t(acct?.holder_kind === 'merchant' ? 'Merchant' : 'Account')} · {shortId(q.account_id)}</b>
       <div className="money3">
-        <div><span className="lbl">Total</span><b>{thb(q.ledger.total_minor)}</b></div>
-        <div><span className="lbl">Usable</span><b>{thb(q.ledger.available_minor)}</b></div>
-        <div><span className="lbl">Held</span><b className={q.ledger.restricted_minor ? 'amber' : ''}>{thb(q.ledger.restricted_minor)}</b></div>
+        <div><span className="lbl">{t('Total')}</span><b>{thb(q.ledger.total_minor)}</b></div>
+        <div><span className="lbl">{t('Usable')}</span><b>{thb(q.ledger.available_minor)}</b></div>
+        <div><span className="lbl">{t('Held')}</span><b className={q.ledger.restricted_minor ? 'amber' : ''}>{thb(q.ledger.restricted_minor)}</b></div>
       </div>
       {sub ? <>
         <div className="doc-line"><Icon name="file" size={18} />
-          <div><b>Evidence {sub.submission_id}</b>
-            <div className="small muted">{sub.consistency.consistent ? 'Receipt matches amount, time and payer.' : `Does not match: ${sub.consistency.issues.join('; ')}`}</div></div>
+          <div><b>{t('Evidence')} {sub.submission_id}</b>
+            <div className="small muted">{sub.consistency.consistent ? t('Receipt matches amount, time and payer.') : t('Does not match: {x}', { x: sub.consistency.issues.join('; ') })}</div></div>
         </div>
-        {!released && <div className="callout amber"><Icon name="alert" size={16} />Consistency is not proof. Officer review required.</div>}
-      </> : !released && <div className="small muted" style={{ marginTop: 10 }}>Waiting for the account holder to send evidence.</div>}
+        {!released && <div className="callout amber"><Icon name="alert" size={16} />{t('Consistency is not proof. Officer review required.')}</div>}
+      </> : !released && <div className="small muted" style={{ marginTop: 10 }}>{t('Waiting for the account holder to send evidence.')}</div>}
       {rec && (
         <div className="row small" style={{ marginTop: 12 }}>
-          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Icon name="send" size={15} />Recommendation</span>
-          <b className="teal">{SHORT_ACTION[rec.action_type]} · {rec.recommendation_id}</b>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><Icon name="send" size={15} />{t('Recommendation')}</span>
+          <b className="teal">{t(SHORT_ACTION[rec.action_type])} · {rec.recommendation_id}</b>
         </div>
       )}
       {rec && canAct(rec, run) && (
         <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-          <div className="row"><b>Officer console</b><span className="xs muted">Scope: <b className="amber">{thb(q.amount_minor)} only</b></span></div>
-          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Decision reason" style={{ width: '100%', marginTop: 8 }} />
+          <div className="row"><b>{t('Officer console')}</b><span className="xs muted">{t('Scope')}: <b className="amber">{t('{amt} only', { amt: thb(q.amount_minor) })}</b></span></div>
+          <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={t('Decision reason')} style={{ width: '100%', marginTop: 8 }} />
           <ActionButtons rec={rec} org={org} run={run} reason={reason} />
         </div>
       )}
       <div style={{ marginTop: 12 }}>
-        <span className="small" style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600 }}><Icon name="clock" size={15} />Audit trail</span>
+        <span className="small" style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600 }}><Icon name="clock" size={15} />{t('Audit trail')}</span>
         <ul className="timeline">
           {q.history.map((h: Json, i: number) => (
-            <li key={i}><span className="t">{hm(h.at)}</span><span>{h.state === 'restricted' ? `Officer placed ${thb(q.amount_minor)} hold` : HIST_LABEL[h.state] ?? h.state}</span></li>
+            <li key={i}><span className="t">{hm(h.at)}</span><span>{h.state === 'restricted' ? t('Officer placed {amt} hold', { amt: thb(q.amount_minor) }) : t(HIST_LABEL[h.state] ?? h.state)}</span></li>
           ))}
         </ul>
       </div>
@@ -389,7 +390,7 @@ const WD_STATE: Record<string, [string, string]> = {
 }
 
 function ExchangePanel({ org, data, run, onExpand, limit }: PanelProps) {
-  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
+  if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">{t('Loading…')}</div></div>
   const recs = live(data.recommendations)
   const wd = data.withdrawals[data.withdrawals.length - 1]
   const wdRec = wd && [...recs].reverse().find((r) => r.subject_state?.kind === 'withdrawal')
@@ -405,35 +406,35 @@ function ExchangePanel({ org, data, run, onExpand, limit }: PanelProps) {
       <PanelHead org={org} onExpand={onExpand} />
       <div className="box">
         {!wd ? <>
-          <div className="card-title"><span className="ico"><Icon name="list" /></span>Withdrawals</div>
-          <div className="empty">No withdrawal request yet.</div>
+          <div className="card-title"><span className="ico"><Icon name="list" /></span>{t('Withdrawals')}</div>
+          <div className="empty">{t('No withdrawal request yet.')}</div>
         </> : <>
-          <div className="card-title"><span className="ico"><Icon name="list" /></span>Withdrawal {shortId(wd.withdrawal_id)}</div>
+          <div className="card-title"><span className="ico"><Icon name="list" /></span>{t('Withdrawal {id}', { id: shortId(wd.withdrawal_id) })}</div>
           <div className="row" style={{ marginTop: 10 }}>
             <span className="big-amt">{usdt(wd.amount_minor).replace('.00 ', ' ')}</span>
-            <span className={`pill ${WD_STATE[wd.state]?.[1] ?? ''}`}>{WD_STATE[wd.state]?.[0] ?? wd.state}</span>
+            <span className={`pill ${WD_STATE[wd.state]?.[1] ?? ''}`}>{t(WD_STATE[wd.state]?.[0] ?? wd.state)}</span>
           </div>
-          <div className="muted" style={{ marginBottom: 10 }}>Customer {shortId(wd.customer_id)} · {wd.chain.toUpperCase()}</div>
-          <div className="deadline"><Icon name="clock" size={17} /><span className="grow">Control deadline</span><b className="teal">{hm(wd.controllable_until)}</b></div>
-          {refs[wd.customer_id] && <div className="deadline"><Icon name="file" size={17} /><span className="grow">{verified.has(shortId(wd.customer_id)) ? 'Verified deposit reference' : 'Deposit reference'}</span><span>{refs[wd.customer_id]}</span></div>}
+          <div className="muted" style={{ marginBottom: 10 }}>{t('Customer')} {shortId(wd.customer_id)} · {wd.chain.toUpperCase()}</div>
+          <div className="deadline"><Icon name="clock" size={17} /><span className="grow">{t('Control deadline')}</span><b className="teal">{hm(wd.controllable_until)}</b></div>
+          {refs[wd.customer_id] && <div className="deadline"><Icon name="file" size={17} /><span className="grow">{t(verified.has(shortId(wd.customer_id)) ? 'Verified deposit reference' : 'Deposit reference')}</span><span>{refs[wd.customer_id]}</span></div>}
           <ul className="timeline" style={{ marginTop: 10 }}>
-            <li><span className="t">{hm(wd.requested_at)}</span><span>Request received</span></li>
-            {wdDecisions.map((d: Json) => <li key={d.decision_id}><span className="t">{hm(d.recorded_at)}</span><span>Officer {d.action.replace(/_/g, ' ')} {d.outcome}</span></li>)}
-            {wd.state === 'broadcast' && <li><span className="t">-</span><span>Broadcast on chain (no longer controllable)</span></li>}
+            <li><span className="t">{hm(wd.requested_at)}</span><span>{t('Request received')}</span></li>
+            {wdDecisions.map((d: Json) => <li key={d.decision_id}><span className="t">{hm(d.recorded_at)}</span><span>{t('Officer')} {t(d.action.replace(/_/g, ' '))} {t(d.outcome)}</span></li>)}
+            {wd.state === 'broadcast' && <li><span className="t">-</span><span>{t('Broadcast on chain (no longer controllable)')}</span></li>}
           </ul>
           {wdRec && <ActionButtons rec={wdRec} org={org} run={run} />}
-          {pending && <div className="xs amber" style={{ textAlign: 'center', marginTop: 8 }}>Officer decision required</div>}
+          {pending && <div className="xs amber" style={{ textAlign: 'center', marginTop: 8 }}>{t('Officer decision required')}</div>}
         </>}
       </div>
       <div className="box">
-        <div className="card-title" style={{ marginBottom: 10 }}><span className="ico"><Icon name="list" /></span>Deposit feed</div>
-        {deposits.length === 0 ? <div className="empty">No deposits yet.</div> : deposits.map((f: Json) => {
+        <div className="card-title" style={{ marginBottom: 10 }}><span className="ico"><Icon name="list" /></span>{t('Deposit feed')}</div>
+        {deposits.length === 0 ? <div className="empty">{t('No deposits yet.')}</div> : deposits.map((f: Json) => {
           const p = parseFeed(f)
           const ok = verified.has(p.to)
           return (
             <div key={f.seq} className="feed-ok">
               {ok ? <Icon name="checkCircle" size={20} /> : <Icon name="clock" size={20} />}
-              <span>{p.to} · {p.amount} · {ok ? 'Verified' : 'Sent'}</span>
+              <span>{p.to} · {p.amount} · {t(ok ? 'Verified' : 'Sent')}</span>
             </div>
           )
         })}
@@ -463,25 +464,25 @@ function Inspector({ views, sel, present }: { views: Record<Org, Json>; sel: Sel
     <div className="card-head" style={{ flexWrap: 'wrap' }}>
       <span className="card-title">
         <span className="inst-ico" style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--navy-2)', color: '#5fd6cf' }}><Icon name="code" /></span>
-        <span className="caps">API call inspector</span>
-        {entry && <span className="small muted" style={{ fontWeight: 400 }}>Selected event <b style={{ color: 'var(--text)' }}>{shortId(entry.event_id ?? '')} · {parseFeed(entry).to ? `${parseFeed(entry).from} → ${parseFeed(entry).to}` : parseFeed(entry).from}</b></span>}
+        <span className="caps">{t('API call inspector')}</span>
+        {entry && <span className="small muted" style={{ fontWeight: 400 }}>{t('Selected event')} <b style={{ color: 'var(--text)' }}>{shortId(entry.event_id ?? '')} · {parseFeed(entry).to ? `${parseFeed(entry).from} → ${parseFeed(entry).to}` : parseFeed(entry).from}</b></span>}
       </span>
       <span style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        {entry && !present && <button onClick={() => setShowJson(!showJson)} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="code" size={15} />{showJson ? 'Hide JSON' : 'View JSON'}</button>}
-        <span className="xs muted">Transaction ranking score, not a probability.</span>
+        {entry && !present && <button onClick={() => setShowJson(!showJson)} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><Icon name="code" size={15} />{t(showJson ? 'Hide JSON' : 'View JSON')}</button>}
+        <span className="xs muted">{t('Transaction ranking score, not a probability.')}</span>
       </span>
     </div>
   )
-  if (!entry || !data) return <>{head}<div className="empty">Click any transaction row to see the call it made to the Engine API.</div></>
+  if (!entry || !data) return <>{head}<div className="empty">{t('Click any transaction row to see the call it made to the Engine API.')}</div></>
   const { posted, event, result, assess } = findCalls(data.api_log, entry)
   const res = assess?.response
   const recs = data.recommendations ?? []
   const decisions = data.decisions ?? []
   const steps = [
-    { label: 'Evidence', icon: 'file', on: true, cls: '' },
-    { label: 'Recommendation', icon: 'graph', on: recs.length > 0, cls: 'teal' },
-    { label: 'Officer decision', icon: 'user', on: decisions.length > 0, cls: 'amber' },
-    { label: 'Ledger update', icon: 'database', on: decisions.some((d: Json) => d.outcome === 'acknowledged'), cls: 'navy' },
+    { label: t('Evidence'), icon: 'file', on: true, cls: '' },
+    { label: t('Recommendation'), icon: 'graph', on: recs.length > 0, cls: 'teal' },
+    { label: t('Officer decision'), icon: 'user', on: decisions.length > 0, cls: 'amber' },
+    { label: t('Ledger update'), icon: 'database', on: decisions.some((d: Json) => d.outcome === 'acknowledged'), cls: 'navy' },
   ]
   const p = parseFeed(entry)
   return (
@@ -489,25 +490,25 @@ function Inspector({ views, sel, present }: { views: Record<Org, Json>; sel: Sel
       {head}
       <div className="inspector">
         <div className="pane">
-          <h4>Request · <span style={{ fontWeight: 500 }}>{event?.event_type?.endsWith('transfer') ? `Assess ${p.amount} transfer` : (event?.event_type ?? 'event').replace(/_/g, ' ')}</span></h4>
+          <h4>{t('Request')} · <span style={{ fontWeight: 500 }}>{event?.event_type?.endsWith('transfer') ? t('Assess {amt} transfer', { amt: p.amount }) : t((event?.event_type ?? 'event').replace(/_/g, ' '))}</span></h4>
           <dl className="kv">
-            <dt>Event</dt><dd>{event?.source_event_id ?? shortId(entry.event_id ?? '')}</dd>
-            {event?.from_ref && <><dt>From</dt><dd>{shortId(event.from_ref)}</dd></>}
-            {event?.to_ref && <><dt>To</dt><dd>{shortId(event.to_ref)}</dd></>}
-            <dt>Occurred</dt><dd>{time(event?.occurred_at)}</dd>
-            <dt>Available</dt><dd>{time(event?.available_at ?? entry.sim_time)}</dd>
+            <dt>{t('Event')}</dt><dd>{event?.source_event_id ?? shortId(entry.event_id ?? '')}</dd>
+            {event?.from_ref && <><dt>{t('From')}</dt><dd>{shortId(event.from_ref)}</dd></>}
+            {event?.to_ref && <><dt>{t('To')}</dt><dd>{shortId(event.to_ref)}</dd></>}
+            <dt>{t('Occurred')}</dt><dd>{time(event?.occurred_at)}</dd>
+            <dt>{t('Available')}</dt><dd>{time(event?.available_at ?? entry.sim_time)}</dd>
           </dl>
         </div>
         <div className="pane">
-          <h4>Response · <span className={result?.status === 'accepted' || assess ? 'good' : 'amber'}>{assess ? 'Assessed' : result?.status ?? entry.status}</span></h4>
+          <h4>{t('Response')} · <span className={result?.status === 'accepted' || assess ? 'good' : 'amber'}>{assess ? t('Assessed') : t(result?.status ?? entry.status)}</span></h4>
           <dl className="kv">
             {res ? <>
-              <dt>Ranking score</dt><dd><b>{res.risk_score === null ? `not scored (${res.score_status.replace(/_/g, ' ')})` : res.risk_score.toFixed(2)}</b></dd>
-              <dt>Case</dt><dd>{res.case_id ?? 'none'}</dd>
-              <dt>Recommendations</dt><dd>{res.recommendations.length ? res.recommendations.map((r: Json) => `${r.id} ${SHORT_ACTION[r.action_type] ?? ''}`).join(', ') : 'none'}</dd>
-            </> : <><dt>Assessment</dt><dd>not requested for this event type</dd></>}
-            {event?.reference_id && <><dt>Reference</dt><dd>{event.reference_id}</dd></>}
-            <dt>Latency</dt><dd>{[posted?.latency_ms, assess?.latency_ms].filter((v) => v !== undefined).map((v) => `${v} ms`).join(' + ') || '-'}</dd>
+              <dt>{t('Ranking score')}</dt><dd><b>{res.risk_score === null ? t('not scored ({s})', { s: t(res.score_status.replace(/_/g, ' ')) }) : res.risk_score.toFixed(2)}</b></dd>
+              <dt>{t('Case')}</dt><dd>{res.case_id ?? t('none')}</dd>
+              <dt>{t('Recommendations')}</dt><dd>{res.recommendations.length ? res.recommendations.map((r: Json) => `${r.id} ${t(SHORT_ACTION[r.action_type] ?? '')}`).join(', ') : t('none')}</dd>
+            </> : <><dt>{t('Assessment')}</dt><dd>{t('not requested for this event type')}</dd></>}
+            {event?.reference_id && <><dt>{t('Reference')}</dt><dd>{event.reference_id}</dd></>}
+            <dt>{t('Latency')}</dt><dd>{[posted?.latency_ms, assess?.latency_ms].filter((v) => v !== undefined).map((v) => `${v} ms`).join(' + ') || '-'}</dd>
           </dl>
         </div>
         <div className="flow">
@@ -541,18 +542,18 @@ function Expanded({ org, data, views, run, present, sel, onSelect, onClose }: {
   const inspect: Sel = sel ?? (lastSeq !== null ? { org, seq: lastSeq } : null)
   const restricted = data.accounts.reduce((s: number, a: Json) => s + (a.ledger?.restricted_minor ?? 0), 0)
   const stats = org === 'exchange'
-    ? [['Customers', data.customers.length], ['Withdrawals', data.withdrawals.length], ['Awaiting officer', open], ['Decisions recorded', data.decisions.length]]
-    : [['Accounts', data.accounts.length], ['Amount held', thb(restricted)], ['Awaiting officer', open], ['Decisions recorded', data.decisions.length]]
+    ? [[t('Customers'), data.customers.length], [t('Withdrawals'), data.withdrawals.length], [t('Awaiting officer'), open], [t('Decisions recorded'), data.decisions.length]]
+    : [[t('Accounts'), data.accounts.length], [t('Amount held'), thb(restricted)], [t('Awaiting officer'), open], [t('Decisions recorded'), data.decisions.length]]
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${NAME(org)} full view`}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('{n} full view', { n: NAME(org) })}>
         <div className="sheet-head">
           <span className="inst-ico"><Icon name="bank" size={24} /></span>
           <span className="inst-name">{NAME(org)}</span>
-          <span className="tag">Simulated client</span>
-          <span className="sub">Everything this institution's system sees and sent at {time(run.clock.now)}</span>
+          <span className="tag">{t('Simulated client')}</span>
+          <span className="sub">{t("Everything this institution's system sees and sent at {at}", { at: time(run.clock.now) })}</span>
           <span className="grow" />
-          <button className="icon-btn" onClick={onClose} aria-label="Close full view" title="Close (Esc)"><Icon name="close" size={20} /></button>
+          <button className="icon-btn" onClick={onClose} aria-label={t('Close full view')} title={`${t('Close')} (Esc)`}><Icon name="close" size={20} /></button>
         </div>
         <div className="sheet-body">
           <div className="stat-row">
@@ -562,21 +563,21 @@ function Expanded({ org, data, views, run, present, sel, onSelect, onClose }: {
             <div className="stack">
               {org !== 'exchange' && data.review_queue.map((q: Json) => <ReviewCard key={q.restriction_id} q={q} data={data} org={org} run={run} />)}
               <div className="card">
-                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="file" /></span>Recommendations</span><span className="sub">{recs.length} received</span></div>
-                {recs.length === 0 ? <div className="empty">No recommendations yet.</div> : recs.map((r) => <RecFull key={r.recommendation_id} rec={r} org={org} run={run} />)}
+                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="file" /></span>{t('Recommendations')}</span><span className="sub">{t('{n} received', { n: recs.length })}</span></div>
+                {recs.length === 0 ? <div className="empty">{t('No recommendations yet.')}</div> : recs.map((r) => <RecFull key={r.recommendation_id} rec={r} org={org} run={run} />)}
               </div>
             </div>
             <div className="stack">
               <Holdings org={org} data={data} />
               <div className="card">
-                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="file" /></span>Transaction feed</span><span className="sub">click a row to inspect its API call</span></div>
+                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="file" /></span>{t('Transaction feed')}</span><span className="sub">{t('click a row to inspect its API call')}</span></div>
                 <FeedTable feed={data.feed} org={org} sel={inspect} onSelect={onSelect} />
               </div>
               <div className="card"><Inspector views={views} sel={inspect} present={present} /></div>
               <div className="card">
-                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="code" /></span>API calls</span><span className="sub">{data.api_log.length} calls</span></div>
+                <div className="card-head"><span className="card-title"><span className="ico"><Icon name="code" /></span>{t('API calls')}</span><span className="sub">{t('{n} calls', { n: data.api_log.length })}</span></div>
                 <table className="data">
-                  <thead><tr><th>Sim time</th><th>Call</th><th>Status</th><th className="r">Latency</th></tr></thead>
+                  <thead><tr><th>{t('Sim time')}</th><th>{t('Call')}</th><th>{t('Status')}</th><th className="r">{t('Latency')}</th></tr></thead>
                   <tbody>{[...data.api_log].reverse().map((l: Json) => (
                     <tr key={l.seq}><td className="num">{time(l.sim_time)}</td><td><code>{l.method} {l.path.replace(/\/v1\/runs\/[^/]+/, '')}</code></td>
                       <td><span className={`pill ${l.status_code < 300 ? 'good' : 'bad'}`}>{l.status_code}</span></td><td className="r">{l.latency_ms} ms</td></tr>
@@ -594,23 +595,23 @@ function Expanded({ org, data, views, run, present, sel, onSelect, onClose }: {
 function Holdings({ org, data }: { org: Org; data: Json }) {
   if (org === 'exchange') return (
     <div className="card">
-      <div className="card-head"><span className="card-title"><span className="ico"><Icon name="wallet" /></span>Customers and withdrawals</span></div>
+      <div className="card-head"><span className="card-title"><span className="ico"><Icon name="wallet" /></span>{t('Customers and withdrawals')}</span></div>
       <table className="data">
-        <thead><tr><th>Customer</th><th className="r">THB</th><th className="r">USDT</th></tr></thead>
+        <thead><tr><th>{t('Customer')}</th><th className="r">THB</th><th className="r">USDT</th></tr></thead>
         <tbody>{data.customers.map((c: Json) => <tr key={c.customer_id}><td>{shortId(c.customer_id)}</td><td className="r">{thb(c.balances.THB)}</td><td className="r">{usdt(c.balances.USDT)}</td></tr>)}</tbody>
       </table>
       {data.withdrawals.length > 0 && <table className="data" style={{ marginTop: 12 }}>
-        <thead><tr><th>Withdrawal</th><th>Customer</th><th className="r">Amount</th><th>State</th><th>Deadline</th></tr></thead>
+        <thead><tr><th>{t('Withdrawal')}</th><th>{t('Customer')}</th><th className="r">{t('Amount')}</th><th>{t('State')}</th><th>{t('Deadline')}</th></tr></thead>
         <tbody>{data.withdrawals.map((w: Json) => <tr key={w.withdrawal_id}><td>{shortId(w.withdrawal_id)}</td><td>{shortId(w.customer_id)}</td><td className="r">{usdt(w.amount_minor)}</td>
-          <td><span className={`pill ${WD_STATE[w.state]?.[1] ?? ''}`}>{WD_STATE[w.state]?.[0] ?? w.state}</span></td><td>{hm(w.controllable_until)}</td></tr>)}</tbody>
+          <td><span className={`pill ${WD_STATE[w.state]?.[1] ?? ''}`}>{t(WD_STATE[w.state]?.[0] ?? w.state)}</span></td><td>{hm(w.controllable_until)}</td></tr>)}</tbody>
       </table>}
     </div>
   )
   return (
     <div className="card">
-      <div className="card-head"><span className="card-title"><span className="ico"><Icon name="wallet" /></span>Accounts in this bank's ledger</span></div>
+      <div className="card-head"><span className="card-title"><span className="ico"><Icon name="wallet" /></span>{t("Accounts in this bank's ledger")}</span></div>
       <table className="data">
-        <thead><tr><th>Account</th><th>Holder</th><th className="r">Total</th><th className="r">Held</th><th className="r">Usable</th></tr></thead>
+        <thead><tr><th>{t('Account')}</th><th>{t('Holder')}</th><th className="r">{t('Total')}</th><th className="r">{t('Held')}</th><th className="r">{t('Usable')}</th></tr></thead>
         <tbody>{data.accounts.map((a: Json) => (
           <tr key={a.account_id}><td>{shortId(a.account_id)}</td><td className="small">{a.holder_name}</td><td className="r">{thb(a.ledger.total_minor)}</td>
             <td className={`r ${a.ledger.restricted_minor ? 'amber' : ''}`}>{thb(a.ledger.restricted_minor)}</td><td className="r">{thb(a.ledger.available_minor)}</td></tr>
@@ -621,31 +622,31 @@ function Holdings({ org, data }: { org: Org; data: Json }) {
 }
 
 function RecFull({ rec, org, run }: { rec: Json; org: Org; run: Json }) {
-  const [reason, setReason] = useState('Reviewed evidence pack')
+  const [reason, setReason] = useState(() => t('Reviewed evidence pack'))
   const [label, tone] = recStatus(rec.status)
   const st = rec.subject_state ?? {}
   return (
     <div className="rec-full" style={{ opacity: rec.status === 'superseded' ? 0.55 : 1 }}>
       <div className="row">
-        <b>{rec.recommendation_id} · {ACTION_LABEL[rec.action_type]}</b>
+        <b>{rec.recommendation_id} · {t(ACTION_LABEL[rec.action_type])}</b>
         <span className={`pill ${tone}`}>{label}</span>
       </div>
       <div className="small muted" style={{ marginTop: 4 }}>
-        {rec.subject_display}{rec.priority && <> · priority {rec.priority}</>}
-        {rec.target_scope.amount_minor !== undefined && <> · scope {money(rec.target_scope.amount_minor, rec.target_scope.asset)}</>}
-        {rec.expires_at && <> · deadline {time(rec.expires_at)}</>}
+        {rec.subject_display}{rec.priority && <> · {t('priority')} {t(rec.priority)}</>}
+        {rec.target_scope.amount_minor !== undefined && <> · {t('scope')} {money(rec.target_scope.amount_minor, rec.target_scope.asset)}</>}
+        {rec.expires_at && <> · {t('deadline')} {time(rec.expires_at)}</>}
       </div>
-      {st.kind === 'account' && <div className="small" style={{ marginTop: 6 }}>Your system: total {thb(st.total_minor)} · held {thb(st.restricted_minor)} · usable {thb(st.available_minor)}</div>}
-      {st.kind === 'withdrawal' && <div className="small" style={{ marginTop: 6 }}>Your system: withdrawal {st.state.replace(/_/g, ' ')}</div>}
-      <div className="section-label">Why</div>
+      {st.kind === 'account' && <div className="small" style={{ marginTop: 6 }}>{t('Your system: total {a} · held {b} · usable {c}', { a: thb(st.total_minor), b: thb(st.restricted_minor), c: thb(st.available_minor) })}</div>}
+      {st.kind === 'withdrawal' && <div className="small" style={{ marginTop: 6 }}>{t('Your system: withdrawal {s}', { s: t(st.state.replace(/_/g, ' ')) })}</div>}
+      <div className="section-label">{t('Why')}</div>
       <ul style={{ marginTop: 0 }}>{rec.rationale.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
-      <div className="section-label">Evidence ({rec.evidence.length})</div>
+      <div className="section-label">{t('Evidence')} ({rec.evidence.length})</div>
       <ul style={{ marginTop: 0 }}>{rec.evidence.map((e: Json, i: number) => <li key={i}><span className="ev-kind">{e.kind.replace(/_/g, ' ')}</span>{e.text}</li>)}</ul>
       {rec.decisions.length > 0 && <>
-        <div className="section-label">Officer decisions</div>
-        <ul style={{ marginTop: 0 }}>{rec.decisions.map((d: Json) => <li key={d.decision_id ?? d.idempotency_key}>{hm(d.recorded_at)} · {d.action.replace(/_/g, ' ')} → <b>{d.outcome}</b> ({d.outcome_detail})</li>)}</ul>
+        <div className="section-label">{t('Officer decisions')}</div>
+        <ul style={{ marginTop: 0 }}>{rec.decisions.map((d: Json) => <li key={d.decision_id ?? d.idempotency_key}>{hm(d.recorded_at)} · {t(d.action.replace(/_/g, ' '))} → <b>{t(d.outcome)}</b> ({d.outcome_detail})</li>)}</ul>
       </>}
-      {canAct(rec, run) && <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Decision reason" style={{ width: '100%', marginTop: 10 }} />}
+      {canAct(rec, run) && <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} aria-label={t('Decision reason')} style={{ width: '100%', marginTop: 10 }} />}
       <ActionButtons rec={rec} org={org} run={run} reason={reason} />
     </div>
   )

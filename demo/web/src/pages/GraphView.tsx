@@ -1,5 +1,7 @@
 import type { Json } from '../api'
 import { shortId, thb, usdt } from '../format'
+import { t } from '../i18n'
+import type { Path } from '../graphPath'
 
 // Lane graph: Bank | Exchange | Chain, laid out left to right in money-flow order.
 // The exchange settlement account is a hub: it is not drawn as a node. A transfer into it is drawn
@@ -9,6 +11,7 @@ export type GraphSel = { kind: 'edge' | 'node'; id: string } | null
 type Pt = { x: number; y: number }
 type N = Pt & { id: string; raw: Json; col: number; role: string }
 
+const MAX_DEPTH = 8   // transfers can form loops; cap the column count so the graph cannot run away
 const COL_W = 132
 const ROW_H = 96
 const TOP = 74
@@ -16,12 +19,16 @@ const PAD_X = 52
 
 const C = {
   teal: '#12797d', tealDark: '#0d5d63', tealSoft: '#e2f2f1', line: '#2c8a8e', gray: '#7b8a93', amber: '#b4630f',
-  amberSoft: '#fcf0dd', text: '#0c1f2b', text2: '#475965', laneBank: '#eef5f7', laneEx: '#e9f3f4', laneChain: '#e4f0f1',
+  amberSoft: '#fcf0dd', path: '#d9480f', text: '#0c1f2b', text2: '#475965', laneBank: '#eef5f7', laneEx: '#e9f3f4', laneChain: '#e4f0f1',
 }
 
 function bankLabel(id: string) { return shortId(id) }
 
-export default function GraphView({ graph, merchantId, sel, onSelect }: { graph: Json; merchantId?: string; sel: GraphSel; onSelect: (s: GraphSel) => void }) {
+export default function GraphView({ graph, merchantId, sel, path, onSelect }: { graph: Json; merchantId?: string; sel: GraphSel; path?: Path | null; onSelect: (s: GraphSel) => void }) {
+  // With a selected path, everything off the path fades.
+  const fade = (on: boolean) => (path && !on ? 0.15 : 1)
+  const onE = (id: string) => !!path?.edges.has(id)
+  const onN = (id: string) => !!path?.nodes.has(id)
   const hubs = new Set(graph.nodes.filter((n: Json) => n.hub).map((n: Json) => n.id))
   const flagged = (n: Json) => (n.signals?.length ?? 0) > 0 || (n.labels?.length ?? 0) > 0
   const isChainVisible = (n: Json) => n.in_case || n.labels.length > 0
@@ -39,7 +46,7 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
   const depth: Record<string, number> = {}
   const bankNodes = visible.filter((n: Json) => n.lane.startsWith('bank'))
   for (const n of bankNodes) depth[n.id] = 0
-  for (let i = 0; i < bankNodes.length; i++) for (const e of bankEdges) depth[e.target] = Math.max(depth[e.target] ?? 0, (depth[e.source] ?? 0) + 1)
+  for (let i = 0; i < bankNodes.length; i++) for (const e of bankEdges) depth[e.target] = Math.min(MAX_DEPTH, Math.max(depth[e.target] ?? 0, (depth[e.source] ?? 0) + 1))
   const maxBank = Math.max(0, ...Object.values(depth))
   const docCol = maxBank + 1
   const exCol = docCol + (hubEdges.length ? 1 : 0)
@@ -112,17 +119,17 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
       <rect x={8} y={8} width={exStart - 12} height={H - 16} rx={12} fill={C.laneBank} />
       <rect x={exStart} y={8} width={chainStart - exStart - 4} height={H - 16} rx={12} fill={C.laneEx} />
       <rect x={chainStart} y={8} width={W - chainStart - 8} height={H - 16} rx={12} fill={C.laneChain} />
-      <LaneTitle x={(8 + exStart) / 2} label="Bank" icon="bank" />
-      <LaneTitle x={(exStart + chainStart) / 2} label="Exchange" icon="swap" />
-      <LaneTitle x={(chainStart + W) / 2} label="Chain" icon="cube" />
+      <LaneTitle x={(8 + exStart) / 2} label={t('Bank')} icon="bank" />
+      <LaneTitle x={(exStart + chainStart) / 2} label={t('Exchange')} icon="swap" />
+      <LaneTitle x={(chainStart + W) / 2} label={t('Chain')} icon="cube" />
 
       {/* bank transfers */}
       {bankEdges.map((e: Json) => {
         const a = pos[e.source], b = pos[e.target]
         if (!a || !b) return null
         return (
-          <g key={e.id} className="node" onClick={() => onSelect({ kind: 'edge', id: e.id })}>
-            <Edge a={a} b={b} color={edgeColor(e)} width={isSel('edge', e.id) ? 4 : 2} />
+          <g key={e.id} className="node" opacity={fade(onE(e.id))} onClick={() => onSelect({ kind: 'edge', id: e.id })}>
+            <Edge a={a} b={b} color={onE(e.id) ? C.path : edgeColor(e)} width={isSel('edge', e.id) ? 4 : onE(e.id) ? 3 : 2} />
             <EdgeLabel a={a} b={b} text={e.count > 1 ? `${e.count}× ${thb(e.amount_minor)}` : thb(e.amount_minor)} />
           </g>
         )
@@ -136,17 +143,17 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
         const cust = link ? pos[link.target] : null
         const dash = link?.status === 'candidate' ? '7 5' : link?.status === 'unresolved' ? '2 5' : undefined
         return (
-          <g key={e.id} className="node" onClick={() => onSelect({ kind: 'edge', id: e.id })}>
+          <g key={e.id} className="node" opacity={fade(onE(e.id) || (!!link && onE(link.id)))} onClick={() => onSelect({ kind: 'edge', id: e.id })}>
             <Edge a={a} b={{ x: bx - 37, y: by }} color={edgeColor(e)} width={isSel('edge', e.id) ? 4 : 2} />
             <rect x={bx - 62} y={by - 25} width={124} height={50} rx={8} fill="#fff" stroke={isSel('edge', e.id) ? C.teal : '#c6d4d8'} strokeWidth={isSel('edge', e.id) ? 2.5 : 1.2} />
-            <text x={bx} y={by - 7} textAnchor="middle" fontSize={11} fill={C.text2}>To {shortId(e.target)} · {thb(e.amount_minor)}</text>
+            <text x={bx} y={by - 7} textAnchor="middle" fontSize={11} fill={C.text2}>{t('To')} {shortId(e.target)} · {thb(e.amount_minor)}</text>
             {e.reference_id
               ? <><rect x={bx - 36} y={by + 1} width={72} height={18} rx={4} fill={C.tealSoft} /><text x={bx} y={by + 14} textAnchor="middle" fontSize={11} fontWeight={700} fill={C.tealDark}>{e.reference_id}</text></>
-              : <text x={bx} y={by + 14} textAnchor="middle" fontSize={11} fill={C.amber}>no reference</text>}
+              : <text x={bx} y={by + 14} textAnchor="middle" fontSize={11} fill={C.amber}>{t('no reference')}</text>}
             {cust && <>
               <Edge a={{ x: bx + 38, y: by }} b={cust} color={link.status === 'verified' ? C.line : C.gray} width={link.status === 'verified' ? 2.5 : 1.6} dash={dash} />
               <text x={(bx + 62 + cust.x - 24) / 2} y={by - 8} textAnchor="middle" fontSize={11} fontWeight={700} fill={link.status === 'verified' ? C.tealDark : C.gray}>
-                {link.status === 'verified' ? 'Verified' : link.status}</text>
+                {t(link.status === 'verified' ? 'Verified' : link.status)}</text>
             </>}
           </g>
         )
@@ -156,12 +163,12 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
         const a = pos[w.raw.source], dest = pos[w.raw.target]
         const requested = w.raw.status !== 'broadcast'
         return (
-          <g key={w.id} className="node" onClick={() => onSelect({ kind: 'edge', id: w.raw.id })}>
+          <g key={w.id} className="node" opacity={fade(onE(w.raw.id))} onClick={() => onSelect({ kind: 'edge', id: w.raw.id })}>
             {a && <Edge a={a} b={w} color={C.line} width={2} />}
             {dest && <>
               <Edge a={w} b={dest} color={requested ? C.text2 : C.line} width={2} dash={requested ? '7 5' : undefined} />
               <text x={(w.x + dest.x) / 2} y={w.y - 22} textAnchor="middle" fontSize={10.5} fill={C.text2}>{usdt(w.raw.amount_minor).replace('.00 ', ' ')} ·</text>
-              <text x={(w.x + dest.x) / 2} y={w.y - 9} textAnchor="middle" fontSize={10.5} fill={C.text2}>{requested ? 'Requested' : 'Broadcast'}</text>
+              <text x={(w.x + dest.x) / 2} y={w.y - 9} textAnchor="middle" fontSize={10.5} fill={C.text2}>{t(requested ? 'Requested' : 'Broadcast')}</text>
             </>}
           </g>
         )
@@ -171,9 +178,9 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
         const a = pos[e.source], b = pos[e.target]
         if (!a || !b || a.col !== b.col) return null
         return (
-          <g key={e.id} className="node" onClick={() => onSelect({ kind: 'edge', id: e.id })}>
+          <g key={e.id} className="node" opacity={fade(onE(e.id))} onClick={() => onSelect({ kind: 'edge', id: e.id })}>
             <Edge a={a} b={b} color={C.gray} width={1.6} dash="2 4" />
-            <text x={a.x - 8} y={(a.y + b.y) / 2 - 2} textAnchor="end" fontSize={10.5} fill={C.text2}>Historical ·</text>
+            <text x={a.x - 8} y={(a.y + b.y) / 2 - 2} textAnchor="end" fontSize={10.5} fill={C.text2}>{t('Historical')} ·</text>
             <text x={a.x - 8} y={(a.y + b.y) / 2 + 12} textAnchor="end" fontSize={10.5} fill={C.text2}>{usdt(e.amount_minor).replace('.00 ', ' ')}</text>
           </g>
         )
@@ -189,18 +196,18 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
         const icon = p.role === 'customer' || p.role === 'withdrawal' ? 'user' : p.role === 'bank' ? (merchant ? 'store' : 'bank') : 'file'
         const solid = inCase && !merchant && p.role !== 'destination' && !labelled && !reported
         const name = p.role === 'withdrawal' ? (n.label?.split(' ')[0] ?? shortId(n.id)) : p.role === 'bank' ? bankLabel(n.id) : p.role === 'customer' ? shortId(n.id) : ''
-        const sub = merchant ? 'Merchant' : p.role === 'destination' ? 'Destination' : labelled ? 'Labelled address' : p.role === 'bank' && !n.in_case && depth[n.id] === 0 ? 'Source account' : ''
+        const sub = t(merchant ? 'Merchant' : p.role === 'destination' ? 'Destination' : labelled ? 'Labelled address' : p.role === 'bank' && !n.in_case && depth[n.id] === 0 ? 'Source account' : '')
         const selKey = p.role === 'withdrawal' ? isSel('edge', n.id) : isSel('node', p.id)
         return (
-          <g key={p.id} className="node" onClick={(ev) => { ev.stopPropagation(); onSelect(p.role === 'withdrawal' ? { kind: 'edge', id: n.id } : { kind: 'node', id: p.id }) }}>
+          <g key={p.id} className="node" opacity={fade(p.role === 'withdrawal' ? onE(n.id) : onN(p.id))} onClick={(ev) => { ev.stopPropagation(); onSelect(p.role === 'withdrawal' ? { kind: 'edge', id: n.id } : { kind: 'node', id: p.id }) }}>
             {selKey && <circle cx={p.x} cy={p.y} r={30} fill="none" stroke={C.teal} strokeWidth={2} strokeDasharray="3 3" />}
             <circle cx={p.x} cy={p.y} r={22} fill={reported ? '#fff8e8' : solid ? C.tealDark : '#fff'} stroke={reported ? '#e2b04a' : flagged(n) ? C.amber : C.teal} strokeWidth={reported ? 3 : 2} />
             <IconAt name={icon} x={p.x} y={p.y} color={solid ? '#fff' : C.tealDark} />
             {name && <text x={p.x} y={p.y + 38} textAnchor="middle" fontSize={12.5} fontWeight={700} fill={C.text}>{name}</text>}
             {sub && <text x={p.x} y={p.y + (name ? 53 : 38)} textAnchor="middle" fontSize={11.5} fill={C.text2}>{sub}</text>}
-            {reported && <Chip x={p.x} y={p.y + 52} text="Reported" />}
-            {p.role === 'withdrawal' && n.status !== 'broadcast' && <Chip x={p.x} y={p.y + 52} text={n.status === 'held_for_review' ? 'Held for review' : n.status === 'released' ? 'Released' : 'Requested'} />}
-            {p.role === 'withdrawal' && n.status === 'broadcast' && <Chip x={p.x} y={p.y + 52} text="Broadcast" bad />}
+            {reported && <Chip x={p.x} y={p.y + 52} text={t('Reported')} />}
+            {p.role === 'withdrawal' && n.status !== 'broadcast' && <Chip x={p.x} y={p.y + 52} text={t(n.status === 'held_for_review' ? 'Held for review' : n.status === 'released' ? 'Released' : 'Requested')} />}
+            {p.role === 'withdrawal' && n.status === 'broadcast' && <Chip x={p.x} y={p.y + 52} text={t('Broadcast')} bad />}
           </g>
         )
       })}

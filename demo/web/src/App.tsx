@@ -8,6 +8,8 @@ import EnginePage from './pages/Engine'
 import Merchant from './pages/Merchant'
 import Results from './pages/Results'
 import Landing from './pages/Landing'
+import { t, useLang } from './i18n'
+import { LangToggle } from './LangToggle'
 
 type PageId = 'home' | 'institutions' | 'engine' | 'merchant' | 'results' | 'overview'
 const PAGES: { id: PageId; label: string; key: string; icon: string }[] = [
@@ -29,6 +31,7 @@ const narrow = () => window.matchMedia('(max-width: 860px)').matches
 
 export default function App() {
   const { run, version, error, start, clock, setError } = useRun()
+  useLang() // re-render the whole tree when the language changes
   const [page, setPage] = useState<PageId>(readPage)
   const [scenarios, setScenarios] = useState<Json[]>([])
   const [scenario, setScenario] = useState('merchant_300')
@@ -83,49 +86,49 @@ export default function App() {
   const playing = !!run?.clock.playing
   const props = { run, version, present: false }
   const rail = !sideOpen // on wide screens a closed sidebar is an icon rail
-  const tip = (label: string) => (rail ? label : undefined)
+  const tip = (label: string) => (rail ? t(label) : undefined)
 
   return (
     <div className={`shell ${home ? 'side-off' : ''} ${sideOpen ? '' : 'side-collapsed'}`}>
       <div className="side-scrim" onClick={toggleSide} aria-hidden="true" />
       <aside className="sidebar" aria-hidden={home} inert={home}>
         <div className="side-head">
-          <button className="brand" onClick={() => goto('home')} title="Back to home">
+          <button className="brand" onClick={() => goto('home')} title={t('Back to home')}>
             <span className="brand-mark"><Logo size={30} /></span>
-            <span className="brand-text"><b>ทางเชื่อม</b><small>Bank × Crypto Risk Graph</small></span>
+            <span className="brand-text"><b>ทันเงิน</b><small>THAN NGERN</small></span>
           </button>
           <button className="side-collapse" onClick={toggleSide} aria-expanded={sideOpen}
-            aria-label={sideOpen ? 'Collapse sidebar' : 'Expand sidebar'} title={`${sideOpen ? 'Collapse' : 'Expand'} sidebar (B)`}>
+            aria-label={t(sideOpen ? 'Collapse sidebar' : 'Expand sidebar')} title={`${t(sideOpen ? 'Collapse sidebar' : 'Expand sidebar')} (B)`}>
             <Icon name="sidebar" size={18} />
           </button>
         </div>
-        <div className="side-label">Views</div>
+        <div className="side-label">{t('Views')}</div>
         <nav className="side-nav">
           {PAGES.map((p) => (
-            <button key={p.id} className={page === p.id ? 'active' : ''} onClick={() => goto(p.id)} title={tip(p.label)} aria-label={p.label}>
-              <Icon name={p.icon} size={19} /><span className="lbl">{p.label}</span><kbd className="lbl">{p.key}</kbd>
+            <button key={p.id} className={page === p.id ? 'active' : ''} onClick={() => goto(p.id)} title={tip(p.label)} aria-label={t(p.label)}>
+              <Icon name={p.icon} size={19} /><span className="lbl">{t(p.label)}</span><kbd className="lbl">{p.key}</kbd>
             </button>
           ))}
-          <button className={page === 'overview' ? 'active' : ''} onClick={() => goto('overview')} title={tip('Overview')} aria-label="Overview">
-            <Icon name="layout" size={19} /><span className="lbl">Overview</span>
+          <button className={page === 'overview' ? 'active' : ''} onClick={() => goto('overview')} title={tip('Overview')} aria-label={t('Overview')}>
+            <Icon name="layout" size={19} /><span className="lbl">{t('Overview')}</span>
           </button>
         </nav>
         <div className="side-spacer" />
         <div className="side-group">
-          <div className="side-label">Simulation</div>
-          <select value={scenario} onChange={(e) => launch(e.target.value, mode)} aria-label="Scenario" disabled={starting}>
+          <div className="side-label">{t('Simulation')}</div>
+          <select value={scenario} onChange={(e) => launch(e.target.value, mode)} aria-label={t('Scenario')} disabled={starting}>
             {scenarios.map((s) => <option key={s.id} value={s.id}>{s.id}</option>)}
           </select>
-          <select value={mode} onChange={(e) => launch(scenario, e.target.value as 'live' | 'recorded')} aria-label="Mode" disabled={starting}>
-            <option value="live">Live inference</option>
-            <option value="recorded" disabled={!scenarios.find((s) => s.id === scenario)?.recording_available}>Recorded replay</option>
+          <select value={mode} onChange={(e) => launch(scenario, e.target.value as 'live' | 'recorded')} aria-label={t('Mode')} disabled={starting}>
+            <option value="live">{t('Live inference')}</option>
+            <option value="recorded" disabled={!scenarios.find((s) => s.id === scenario)?.recording_available}>{t('Recorded replay')}</option>
           </select>
-          <button className="side-btn" title={tip(`Restart ${scenario}`)} aria-label="Restart run" disabled={starting}
+          <button className="side-btn" title={rail ? t('Restart {s}', { s: scenario }) : undefined} aria-label={t('Restart run')} disabled={starting}
             onClick={() => launch(scenario, mode)}>
-            <Icon name="refresh" size={18} /><span className="lbl">{starting ? 'Starting…' : 'Restart run'}</span>
+            <Icon name="refresh" size={18} /><span className="lbl">{t(starting ? 'Starting…' : 'Restart run')}</span>
           </button>
         </div>
-        <div className="side-foot"><i /><span className="lbl">Synthetic data only</span></div>
+        <div className="side-foot"><i /><span className="lbl">{t('Synthetic data only')}</span></div>
       </aside>
 
       <div className="main">
@@ -136,51 +139,52 @@ export default function App() {
         ) : <>
         <header className="topbar">
           <div className="tb-left">
-            <button className="tb-icon tb-menu" onClick={toggleSide} aria-label="Open menu" aria-expanded={sideOpen}>
+            <button className="tb-icon tb-menu" onClick={toggleSide} aria-label={t('Open menu')} aria-expanded={sideOpen}>
               <Icon name="menu" size={18} />
             </button>
-            <button className="tb-icon" onClick={() => goto('home')} aria-label="Home" title="Home">
+            <button className="tb-icon" onClick={() => goto('home')} aria-label={t('Home')} title={t('Home')}>
               <Icon name="home" size={18} />
             </button>
             <nav className="tb-crumbs" aria-label="Breadcrumb">
-              <span>Demo</span><Icon name="chevronRight" size={14} /><b>{LABELS[page]}</b>
+              <span>{t('Demo')}</span><Icon name="chevronRight" size={14} /><b>{t(LABELS[page])}</b>
             </nav>
-            <span className="tb-case" title={run?.case_ids?.length ? 'Open case' : 'A case opens when the first report reaches the engine'}>
-              <span className="scn">{starting ? 'Starting…' : run?.scenario ?? '…'}</span>
+            <span className="tb-case" title={t(run?.case_ids?.length ? 'Open case' : 'A case opens when the first report reaches the engine')}>
+              <span className="scn">{starting ? t('Starting…') : run?.scenario ?? '…'}</span>
               {run?.case_ids?.length
                 ? <>{run.case_ids[0]}{run.case_ids.length > 1 && <em>+{run.case_ids.length - 1}</em>}</>
-                : <em>Awaiting report</em>}
+                : <em>{t('Awaiting report')}</em>}
             </span>
           </div>
           <div className="tb-status">
-            <span className="chip syn"><i />Synthetic</span>
+            <span className="chip syn"><i />{t('Synthetic')}</span>
             {recorded
-              ? <span className="chip rec"><i />Recorded · {run?.recording}</span>
-              : <span className={`chip ${modelError ? 'err' : 'live'}`}><i />{modelError ? 'Model error' : 'Live'} · {run?.model?.model_id ?? 'model'}</span>}
+              ? <span className="chip rec"><i />{t('Recorded')} · {run?.recording}</span>
+              : <span className={`chip ${modelError ? 'err' : 'live'}`}><i />{t(modelError ? 'Model error' : 'Live')} · {run?.model?.model_id ?? 'model'}</span>}
           </div>
-          <div className="player" role="group" aria-label="Simulation controls">
-            <div className="player-time" title="Simulated time, not real time">
-              <span>Sim time</span><b>{run ? time(run.clock.now) : '--:--:--'}</b>
+          <div className="player" role="group" aria-label={t('Simulation controls')}>
+            <div className="player-time" title={t('Simulated time, not real time')}>
+              <span>{t('Sim time')}</span><b>{run ? time(run.clock.now) : '--:--:--'}</b>
             </div>
             <button className={`player-main ${playing ? 'on' : ''}`} onClick={() => clock(playing ? 'pause' : 'play')} disabled={!run}
-              aria-label={playing ? 'Pause' : 'Play'} title={`${playing ? 'Pause' : 'Play'} (Space)`}>
+              aria-label={t(playing ? 'Pause' : 'Play')} title={`${t(playing ? 'Pause' : 'Play')} (Space)`}>
               <Icon name={playing ? 'pause' : 'play'} size={15} />
             </button>
-            <button className="player-btn" onClick={() => clock('step')} disabled={!run} aria-label="Step" title="Step (→)"><Icon name="step" size={15} /></button>
-            <button className="player-btn" onClick={() => clock('reset')} disabled={!run} aria-label="Reset" title="Reset"><Icon name="reset" size={15} /></button>
-            <select className="player-speed" value={run?.clock.speed ?? 30} onChange={(e) => clock('speed', { speed: Number(e.target.value) })} aria-label="Replay speed" title="Replay speed">
+            <button className="player-btn" onClick={() => clock('step')} disabled={!run} aria-label={t('Step')} title={`${t('Step')} (→)`}><Icon name="step" size={15} /></button>
+            <button className="player-btn" onClick={() => clock('reset')} disabled={!run} aria-label={t('Reset')} title={t('Reset')}><Icon name="reset" size={15} /></button>
+            <select className="player-speed" value={run?.clock.speed ?? 30} onChange={(e) => clock('speed', { speed: Number(e.target.value) })} aria-label={t('Replay speed')} title={t('Replay speed')}>
               {[10, 30, 60, 120, ...(run?.large ? [600] : [])].map((s) => <option key={s} value={s}>{s}×</option>)}
             </select>
           </div>
+          <LangToggle />
         </header>
-        {error && <div className="error-bar"><span>{error}</span><button className="ghost" onClick={() => setError(null)}>Dismiss</button></div>}
+        {error && <div className="error-bar"><span>{error}</span><button className="ghost" onClick={() => setError(null)}>{t('Dismiss')}</button></div>}
         {run?.notices?.length > 0 && <div className="notice-bar">{run.notices[run.notices.length - 1].text}</div>}
 
-        {!run ? <div className="page empty">Starting a run…</div> : page === 'overview' ? (
+        {!run ? <div className="page empty">{t('Starting a run…')}</div> : page === 'overview' ? (
           <div className="overview">
-            <div className="ov"><div className="ov-title">Institutions</div><Institutions {...props} compact /></div>
-            <div className="ov"><div className="ov-title">Our Engine</div><EnginePage {...props} compact /></div>
-            <div className="ov"><div className="ov-title">Merchant</div><Merchant {...props} compact /></div>
+            <div className="ov"><div className="ov-title">{t('Institutions')}</div><Institutions {...props} compact /></div>
+            <div className="ov"><div className="ov-title">{t('Our Engine')}</div><EnginePage {...props} compact /></div>
+            <div className="ov"><div className="ov-title">{t('Merchant')}</div><Merchant {...props} compact /></div>
           </div>
         ) : page === 'institutions' ? <Institutions {...props} />
           : page === 'engine' ? <EnginePage {...props} />

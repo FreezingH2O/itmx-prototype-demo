@@ -81,9 +81,26 @@ def test_reports_join_one_network_case(network_run):
     active = [r for r in view["recommendations"] if r["status"] != "superseded"]
     keys = Counter((r["institution"], r["subject_id"], r["action_type"]) for r in active)
     assert max(keys.values()) == 1
+    # Whole network, every node tagged for grouping; only case accounts and payments into reported ones.
     g = client.get(f"/v1/runs/{rid}/graph").json()
-    assert g["focus"] and len(g["focus_options"]) == net["reported_accounts"]
-    assert 0 < len(g["nodes"]) < 80   # one reported account's flow, drawable
+    assert g["mode"] == "network" and len(g["focus_options"]) == net["reported_accounts"]
+    assert all(n["stage"] in g["stages"] for n in g["nodes"])
+    case = next(c for c in view["cases"] if c["case_id"] == net["case_id"])
+    scope = set(case["scope_events"])
+    reported = {o["id"] for o in g["focus_options"]}
+    for e in g["edges"]:
+        if e["kind"] in ("transfer", "deposit"):
+            assert e["target"] in reported or set(e["evidence_event_ids"]) <= scope
+    one = client.get(f"/v1/runs/{rid}/graph", params={"focus": g["focus_options"][0]["id"]}).json()
+    assert one["mode"] == "focus" and len(one["nodes"]) < len(g["nodes"])
+
+
+def test_graph_waits_for_a_report(client):  # noqa: F811
+    """Before any report the large graph draws nothing (it used to draw every live transfer)."""
+    rid = client.post("/v1/runs", json={"scenario": "network_day", "speed": 600}).json()["run_id"]
+    client.post(f"/v1/runs/{rid}/clock", json={"action": "seek", "to": "2026-10-01T09:00:00+07:00"})
+    g = client.get(f"/v1/runs/{rid}/graph").json()
+    assert g["mode"] == "waiting" and g["nodes"] == [] and g["waiting"]["transfers"] > 100
 
 
 def test_merchant_release_cycle_at_bank_e(network_run):

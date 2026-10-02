@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { Json } from '../api'
 import { Icon, Logo } from '../icons'
+import { t } from '../i18n'
+import { LangToggle } from '../LangToggle'
 
 // Landing page: what the prototype is, which case to try first, and how to drive the demo.
 type Target = 'institutions' | 'engine' | 'merchant' | 'results'
@@ -110,43 +112,43 @@ export default function Landing({ scenarios, scenario, setScenario, mode, setMod
       <header className="lp-header">
         <div className="lp-brand">
           <span className="lp-mark"><Logo size={30} /></span>
-          <span><b>ทางเชื่อม</b><small>Bank × Crypto Risk Graph</small></span>
+          <span><b>ทันเงิน</b><small>THAN NGERN</small></span>
         </div>
         <nav className="lp-links">
-          <button onClick={() => go('lp-engine')}>Our engine</button>
-          <button onClick={() => go('lp-cases')}>Demo cases</button>
-          <button onClick={() => go('lp-how')}>How to use</button>
+          <button onClick={() => go('lp-engine')}>{t('Our engine')}</button>
+          <button onClick={() => go('lp-cases')}>{t('Demo cases')}</button>
+          <button onClick={() => go('lp-how')}>{t('How to use')}</button>
         </nav>
         <span className="lp-spacer" />
-        <span className="lp-chip"><i />Synthetic prototype</span>
-        <button className="lp-btn primary sm" onClick={() => onOpen('institutions')}>Open demo<Icon name="arrowRight" size={16} /></button>
+        <span className="lp-chip"><i />{t('Synthetic prototype')}</span>
+        <LangToggle />
+        <button className="lp-btn primary sm" onClick={() => onOpen('institutions')}>{t('Open demo')}<Icon name="arrowRight" size={16} /></button>
       </header>
 
       <section className="lp-hero">
         <div className="lp-hero-copy">
           <div className="lp-eyebrow">Bank × Crypto Risk Graph</div>
-          <h1>Connect the evidence.<br /><span>Support the decision.</span></h1>
+          <h1>{t('Connect the evidence.')}<br /><span>{t('Support the decision.')}</span></h1>
           <p className="lp-lede">
-            <b>ทางเชื่อม</b> brings bank transactions, exchange activity and blockchain evidence into one reviewable view.
-            Officers see the full context and decide the next action.
+            <b>ทันเงิน</b> {t('brings bank transactions, exchange activity and blockchain evidence into one reviewable view. Officers see the full context and decide the next action.')}
           </p>
           <div className="lp-cta">
-            <button className="lp-btn primary" onClick={() => go('lp-cases')}>Explore the demo<Icon name="arrowRight" size={18} /></button>
-            <button className="lp-btn ghost-dark" onClick={() => go('lp-how')}>How it works<Icon name="arrowDown" size={18} /></button>
+            <button className="lp-btn primary" onClick={() => go('lp-cases')}>{t('Explore the demo')}<Icon name="arrowRight" size={18} /></button>
+            <button className="lp-btn ghost-dark" onClick={() => go('lp-how')}>{t('How it works')}<Icon name="arrowDown" size={18} /></button>
           </div>
           <div className="lp-hero-foot">
-            <span><Icon name="database" size={15} />Synthetic data</span>
-            <span><Icon name="user" size={15} />Human review at every decision</span>
+            <span><Icon name="database" size={15} />{t('Synthetic data')}</span>
+            <span><Icon name="user" size={15} />{t('Human review at every decision')}</span>
           </div>
         </div>
 
-        <figure className="lp-flow" aria-label="How evidence flows to an officer decision">
-          <figcaption>From evidence to review</figcaption>
+        <figure className="lp-flow" aria-label={t('How evidence flows to an officer decision')}>
+          <figcaption>{t('From evidence to review')}</figcaption>
           <div className="lp-sources">
             {SOURCES.map((s) => (
               <div key={s.name} className="lp-src">
                 <span className="ic"><Icon name={s.icon} size={20} /></span>
-                <b>{s.name}</b><small>{s.text}</small>
+                <b>{t(s.name)}</b><small>{t(s.text)}</small>
               </div>
             ))}
           </div>
@@ -154,35 +156,35 @@ export default function Landing({ scenarios, scenario, setScenario, mode, setMod
             <path d="M50 0 C50 26 150 10 150 36" /><path d="M150 0 V36" /><path d="M250 0 C250 26 150 10 150 36" />
           </svg>
           <div className="lp-engine-node">
-            <b>Our Engine</b><small>Link · Trace · Explain</small>
+            <b>{t('Our Engine')}</b><small>{t('Link · Trace · Explain')}</small>
           </div>
           <span className="lp-vline" />
-          <div className="lp-node"><b>Evidence + recommendations</b><small>Verified links · Risk reasons · Missing context</small></div>
+          <div className="lp-node"><b>{t('Evidence + recommendations')}</b><small>{t('Verified links · Risk reasons · Missing context')}</small></div>
           <span className="lp-vline" />
-          <div className="lp-node officer"><span className="ic"><Icon name="user" size={16} /></span><div><b>Officer decision</b><small>Reviewed by the responsible institution</small></div></div>
-          <p className="lp-flow-note">Recommendations support review. They never move funds.</p>
+          <div className="lp-node officer"><span className="ic"><Icon name="user" size={16} /></span><div><b>{t('Officer decision')}</b><small>{t('Reviewed by the responsible institution')}</small></div></div>
+          <p className="lp-flow-note">{t('Recommendations support review. They never move funds.')}</p>
         </figure>
       </section>
 
       <div className="lp-body">
         <div className="lp-about">
-          <b>About this prototype</b>
-          <span><Icon name="database" size={15} />Synthetic scenarios</span>
-          <span><Icon name="lock" size={15} />No live bank or blockchain connection</span>
-          <span><Icon name="gear" size={15} />R0 demo uses hand-set rules</span>
+          <b>{t('About this prototype')}</b>
+          <span><Icon name="database" size={15} />{t('Synthetic scenarios')}</span>
+          <span><Icon name="lock" size={15} />{t('No live bank or blockchain connection')}</span>
+          <span><Icon name="gear" size={15} />{t('R0 demo uses hand-set rules')}</span>
         </div>
 
         <section id="lp-engine" className="lp-section">
           <div className="lp-section-head">
-            <div className="lp-kicker">What the engine helps you do</div>
-            <h2>One case, three views of the money</h2>
+            <div className="lp-kicker">{t('What the engine helps you do')}</div>
+            <h2>{t('One case, three views of the money')}</h2>
           </div>
           <div className="lp-caps">
             {CAPABILITIES.map((c) => (
               <div key={c.title} className="lp-cap">
                 <span className="ic"><Icon name={c.icon} size={22} /></span>
-                <h3>{c.title}</h3>
-                <p>{c.text}</p>
+                <h3>{t(c.title)}</h3>
+                <p>{t(c.text)}</p>
               </div>
             ))}
           </div>
@@ -190,38 +192,38 @@ export default function Landing({ scenarios, scenario, setScenario, mode, setMod
 
         <section id="lp-cases" className="lp-section">
           <div className="lp-section-head">
-            <div className="lp-kicker">Demo cases</div>
-            <h2>Four cases, one question: what can the evidence support?</h2>
-            <p>Start with the two headline cases: one payment at an innocent shop, and a whole day of a mule network. The two cases below replay the merchant story with one thing changed, a missing reference or a late report. Times are simulated (1 Oct, Bangkok time).</p>
+            <div className="lp-kicker">{t('Demo cases')}</div>
+            <h2>{t('Four cases, one question: what can the evidence support?')}</h2>
+            <p>{t('Start with the two headline cases: one payment at an innocent shop, and a whole day of a mule network. The two cases below replay the merchant story with one thing changed, a missing reference or a late report. Times are simulated (1 Oct, Bangkok time).')}</p>
           </div>
           <div className="lp-cases">
             {CASES.map((c, i) => (
               <article key={c.id} className={`lp-case ${i === 0 ? 'featured' : ''} ${c.id === 'network_day' ? 'scale' : ''}`}>
                 <div className="lp-case-top">
-                  <span className={`lp-badge ${i === 0 ? '' : c.id === 'network_day' ? 'scale' : 'muted'}`}>{c.badge}</span>
-                  <span className="lp-focus">Focus: {c.focus}</span>
+                  <span className={`lp-badge ${i === 0 ? '' : c.id === 'network_day' ? 'scale' : 'muted'}`}>{t(c.badge)}</span>
+                  <span className="lp-focus">{t('Focus: {f}', { f: t(c.focus) })}</span>
                 </div>
-                <h3>{c.title}</h3>
+                <h3>{t(c.title)}</h3>
                 <code>{c.id}</code>
-                <p className="lp-short">{c.short}</p>
+                <p className="lp-short">{t(c.short)}</p>
                 <div className="lp-stats">
-                  {c.stats.map(([v, l, tone]) => <div key={l}><b className={tone}>{v}</b><span>{l}</span></div>)}
+                  {c.stats.map(([v, l, tone]) => <div key={l}><b className={tone}>{t(v)}</b><span>{t(l)}</span></div>)}
                 </div>
                 <div className={`lp-more ${open[c.id] ? 'open' : ''}`} id={`lp-more-${c.id}`}>
                   <div className="lp-more-inner">
-                    <p className="lp-summary">{c.summary}</p>
-                    <div className="lp-story-label">What happens</div>
+                    <p className="lp-summary">{t(c.summary)}</p>
+                    <div className="lp-story-label">{t('What happens')}</div>
                     <ol className="lp-story">
-                      {c.story.map(([t, txt]) => <li key={t + txt}><span className="t">{t}</span><span>{txt}</span></li>)}
+                      {c.story.map(([tm, txt]) => <li key={tm + txt}><span className="t">{t(tm)}</span><span>{t(txt)}</span></li>)}
                     </ol>
-                    <div className="lp-try"><Icon name="bolt" size={16} /><div><b>Try this</b>{c.tryThis}</div></div>
+                    <div className="lp-try"><Icon name="bolt" size={16} /><div><b>{t('Try this')}</b>{t(c.tryThis)}</div></div>
                   </div>
                 </div>
                 <button className="lp-toggle" onClick={() => toggle(c.id)} aria-expanded={!!open[c.id]} aria-controls={`lp-more-${c.id}`}>
-                  {open[c.id] ? 'Hide details' : 'Show details'}<Icon name="chevronDown" size={16} />
+                  {t(open[c.id] ? 'Hide details' : 'Show details')}<Icon name="chevronDown" size={16} />
                 </button>
                 <button className={`lp-btn ${i === 0 ? 'primary' : 'outline'} block`} onClick={() => onStart(c.id, 'live', c.page)}>
-                  Run this case<span className="lp-opens">opens {c.pageLabel}</span><Icon name="arrowRight" size={16} />
+                  {t('Run this case')}<span className="lp-opens">{t('opens {p}', { p: t(c.pageLabel) })}</span><Icon name="arrowRight" size={16} />
                 </button>
               </article>
             ))}
@@ -230,52 +232,52 @@ export default function Landing({ scenarios, scenario, setScenario, mode, setMod
 
         <section id="lp-how" className="lp-section">
           <div className="lp-section-head">
-            <div className="lp-kicker">How to use the demo</div>
-            <h2>Choose a case and mode, then follow the review</h2>
+            <div className="lp-kicker">{t('How to use the demo')}</div>
+            <h2>{t('Choose a case and mode, then follow the review')}</h2>
           </div>
           <div className="lp-how">
             <div className="lp-setup">
               <label>
-                <span>Scenario</span>
+                <span>{t('Scenario')}</span>
                 <select value={scenario} onChange={(e) => setScenario(e.target.value)}>
                   {(scenarios.length ? scenarios : [{ id: scenario }]).map((s) => <option key={s.id} value={s.id}>{s.id}</option>)}
                 </select>
               </label>
               <label>
-                <span>Mode</span>
+                <span>{t('Mode')}</span>
                 <select value={mode} onChange={(e) => setMode(e.target.value as 'live' | 'recorded')}>
-                  <option value="live">Live inference</option>
-                  <option value="recorded" disabled={!recAvailable}>Recorded replay{recAvailable ? '' : ' (unavailable)'}</option>
+                  <option value="live">{t('Live inference')}</option>
+                  <option value="recorded" disabled={!recAvailable}>{t('Recorded replay')}{recAvailable ? '' : ` ${t('(unavailable)')}`}</option>
                 </select>
               </label>
               <button className="lp-btn primary" onClick={() => onStart(scenario, mode, pageFor(scenario))}>
-                <Icon name="play" size={14} />Start run
+                <Icon name="play" size={14} />{t('Start run')}
               </button>
-              <p className="lp-setup-note"><b>Live</b> submits evidence and officer decisions. <b>Replay</b> shows read-only saved states, when available.</p>
+              <p className="lp-setup-note"><b>{t('Live')}</b> {t('submits evidence and officer decisions.')} <b>{t('Replay')}</b> {t('shows read-only saved states, when available.')}</p>
             </div>
             <ol className="lp-steps">
               {STEPS.map((s, i) => (
                 <li key={s.title}>
                   <span className="n">0{i + 1}</span>
-                  <div><b>{s.title}</b><p>{s.text}</p></div>
+                  <div><b>{t(s.title)}</b><p>{t(s.text)}</p></div>
                 </li>
               ))}
             </ol>
           </div>
           <div className="lp-guard">
             <Icon name="info" size={18} />
-            Submitting evidence never releases funds automatically. Balances change only after an acknowledged officer decision.
+            {t('Submitting evidence never releases funds automatically. Balances change only after an acknowledged officer decision.')}
           </div>
           <div className="lp-keys">
-            <span className="lbl">Keyboard</span>
-            {KEYS.map(([k, l]) => <span key={k}><kbd>{k}</kbd>{l}</span>)}
+            <span className="lbl">{t('Keyboard')}</span>
+            {KEYS.map(([k, l]) => <span key={k}><kbd>{k}</kbd>{t(l)}</span>)}
           </div>
         </section>
       </div>
 
       <footer className="lp-footer">
-        <span><b>ทางเชื่อม</b> · Bank × Crypto Risk Graph</span>
-        <span>Prototype · Synthetic data · NITMX Fintech Bootcamp 2026</span>
+        <span><b>ทันเงิน</b> · Than Ngern · Bank × Crypto Risk Graph</span>
+        <span>{t('Prototype · Synthetic data · NITMX Fintech Bootcamp 2026')}</span>
       </footer>
     </div>
   )

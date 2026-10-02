@@ -54,23 +54,17 @@ export function Icon({ name, size = 18, className }: P & { name: keyof typeof PA
   )
 }
 
-// Brand mark: a suspension bridge linking two pillars (bank side, crypto side).
+// Brand mark (ทันเงิน / THAN NGERN): a banknote frame, quartered, with a dot at the centre.
 export function Logo({ size = 64 }: { size?: number }) {
+  const light = '#4a9ff5', dark = '#1636c9'
   return (
-    <svg width={size} height={size * 0.62} viewBox="0 0 100 62" aria-hidden="true">
-      <defs>
-        <linearGradient id="lg-cable" x1="0" x2="1">
-          <stop offset="0" stopColor="#5fd6cf" /><stop offset="1" stopColor="#2aa7a3" />
-        </linearGradient>
-      </defs>
-      <path d="M4 44 Q 28 10 50 30 Q 72 10 96 44" fill="none" stroke="url(#lg-cable)" strokeWidth="3" strokeLinecap="round" />
-      <path d="M28 8v38M72 8v38" stroke="#e8f4f4" strokeWidth="4.5" strokeLinecap="round" />
-      <path d="M2 46h96" stroke="#e8f4f4" strokeWidth="3.5" strokeLinecap="round" />
-      {[[14, 33], [20, 28], [38, 23], [44, 26], [56, 26], [62, 23], [80, 28], [86, 33]].map(([x, y]) => (
-        <path key={x} d={`M${x} ${y}V46`} stroke="#5fd6cf" strokeWidth="1.3" opacity=".8" />
-      ))}
-      <circle cx="28" cy="6" r="2.4" fill="#5fd6cf" /><circle cx="72" cy="6" r="2.4" fill="#5fd6cf" />
-      <path d="M10 54h80" stroke="#5fd6cf" strokeWidth="1.2" opacity=".35" strokeLinecap="round" />
+    <svg width={size} height={size * 0.57} viewBox="0 0 120 68" aria-hidden="true">
+      <rect x="4" y="4" width="112" height="60" rx="13" fill="none" stroke={light} strokeWidth="7" />
+      <path d="M60 7v54M7 34h106" stroke={light} strokeWidth="5" />
+      <path d="M8 22a14 14 0 0 0 14-14M98 8a14 14 0 0 0 14 14M8 46a14 14 0 0 1 14 14M98 60a14 14 0 0 1 14-14"
+        fill="none" stroke={light} strokeWidth="5" strokeLinecap="round" />
+      <circle cx="60" cy="34" r="13" fill={light} />
+      <circle cx="60" cy="34" r="8" fill={dark} />
     </svg>
   )
 }

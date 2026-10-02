@@ -3,6 +3,7 @@ import { api, newKey, type Json } from '../api'
 import { baht, hm, thb } from '../format'
 import { Icon } from '../icons'
 import { useView } from '../useRun'
+import { t } from '../i18n'
 
 type Props = { run: Json; version: number; present: boolean; compact?: boolean }
 
@@ -53,7 +54,7 @@ function flowIndex(r: Json | undefined): number {
 export default function Merchant({ run, version, compact }: Props) {
   const role = `merchant:${run.merchant_account_id}`
   const { data } = useView<Json>(`/v1/runs/${run.run_id}/views/${role}`, version)
-  if (!data) return <div className="page empty">Loading merchant app…</div>
+  if (!data) return <div className="page empty">{t('Loading merchant app…')}</div>
   const r = data.restrictions[data.restrictions.length - 1]
   const fi = flowIndex(r)
   const held = data.ledger.restricted_minor
@@ -68,8 +69,8 @@ export default function Merchant({ run, version, compact }: Props) {
       {!compact && (
         <div className="page-head">
           <div>
-            <div className="page-title"><h1>Merchant</h1><span className="tag">Simulated bank app</span></div>
-            <p>A clear review path for the account holder.</p>
+            <div className="page-title"><h1>{t('Merchant')}</h1><span className="tag">{t('Simulated bank app')}</span></div>
+            <p>{t('A clear review path for the account holder.')}</p>
           </div>
         </div>
       )}
@@ -77,29 +78,29 @@ export default function Merchant({ run, version, compact }: Props) {
         <Phone data={data} r={r} run={run} role={role} clock={run.clock.now} />
         {!compact && (
           <div className="card" style={{ padding: 24 }}>
-            <div className="caps" style={{ marginBottom: 20 }}>Review flow</div>
-            {!r ? <div className="empty">No restriction on this account. Nothing for the holder to do.</div> : (
+            <div className="caps" style={{ marginBottom: 20 }}>{t('Review flow')}</div>
+            {!r ? <div className="empty">{t('No restriction on this account. Nothing for the holder to do.')}</div> : (
               <ul className="flow-list">
                 {flow.map((s, i) => (
                   <li key={s.t} className={i < fi ? 'done' : i === fi ? 'cur' : ''}>
                     <span className="c"><Icon name={i < fi ? 'check' : s.icon} size={22} /></span>
-                    <div><b>{i === 3 && fi === 4 ? `Officer decision: ${r.review_state.replace(/_/g, ' ')}` : s.t}</b><span>{s.d}</span></div>
+                    <div><b>{i === 3 && fi === 4 ? t('Officer decision: {d}', { d: t(r.review_state.replace(/_/g, ' ')) }) : t(s.t)}</b><span>{t(s.d)}</span></div>
                   </li>
                 ))}
               </ul>
             )}
             <div style={{ borderTop: '1px solid var(--border)', marginTop: 4, paddingTop: 4 }}>
               {held > 0
-                ? <div className="big-note amber"><Icon name="lock" size={24} />Only {thb(held)} is held</div>
-                : <div className="big-note teal"><Icon name="checkCircle" size={24} />Nothing is held</div>}
-              <div className="big-note teal"><Icon name="wallet" size={24} />{thb(data.ledger.available_minor)} remains usable</div>
+                ? <div className="big-note amber"><Icon name="lock" size={24} />{t('Only {amt} is held', { amt: thb(held) })}</div>
+                : <div className="big-note teal"><Icon name="checkCircle" size={24} />{t('Nothing is held')}</div>}
+              <div className="big-note teal"><Icon name="wallet" size={24} />{t('{amt} remains usable', { amt: thb(data.ledger.available_minor) })}</div>
               <div className="small" style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 16, color: 'var(--text-2)' }}>
-                <Icon name="info" size={20} className="teal" />Balances change after an officer decision.</div>
+                <Icon name="info" size={20} className="teal" />{t('Balances change after an officer decision.')}</div>
             </div>
           </div>
         )}
       </div>
-      {!compact && <div className="foot-note">Prototype design · Synthetic data</div>}
+      {!compact && <div className="foot-note">{t('Prototype design · Synthetic data')}</div>}
     </div>
   )
 }

@@ -5,7 +5,7 @@ Solution documents and the working prototype for the NITMX Fintech Bootcamp 2026
 - **Prototype (Engine API + 4-page demo, synthetic data):** [PROTOTYPE.md](PROTOTYPE.md). Runs with hand-set demo rules; no experiment results are plugged in yet.
 - **Plug in the experiment model:** [PLUGIN.md](PLUGIN.md)
 
-- Current experiment implementation plan: [05-model-experiments](../05-model-experiments/README.md) (Kaggle; design only, no executed results yet)
+- Current experiment implementation plan: [05-model-experiments](../05-model-experiments/README.md) (protocol and plan; results were run on a local RTX 4070 SUPER workstation and are served as the `ibm-aml-results` bundle)
 - Project brief for Claude Code / the team: [CLAUDE.md](CLAUDE.md)
 - Independent solution/technical review (start here): [docs/independent-review-2026-10-01.md](docs/independent-review-2026-10-01.md)
 - Proposed optimized architecture and acceptance scenarios: [docs/optimized-architecture-2026-10-01.md](docs/optimized-architecture-2026-10-01.md)

@@ -19,7 +19,7 @@ def load_model(cfg: dict[str, Any]) -> tuple[ModelAdapter, dict[str, Any]]:
     active = cfg["active_model"]
     if active["kind"] == "rules":
         adapter = RulesAdapter(cfg["rules"], source={"kind": "config", "file": "config/engine.yaml"})
-        status = {"kind": "rules", "live_label": "LIVE inference (hand-set demo rules R0-demo)",
+        status = {"kind": "rules", "live_label": "LIVE inference (hand-set demo rules)",
                   "parity": {"status": "not_applicable"}, "bundle_status": None}
     elif active["kind"] == "bundle":
         bdir = (ROOT / active["path"]).resolve()

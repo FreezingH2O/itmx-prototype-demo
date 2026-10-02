@@ -171,7 +171,6 @@ export default function Landing({ scenarios, scenario, setScenario, mode, setMod
           <b>{t('About this prototype')}</b>
           <span><Icon name="database" size={15} />{t('Synthetic scenarios')}</span>
           <span><Icon name="lock" size={15} />{t('No live bank or blockchain connection')}</span>
-          <span><Icon name="gear" size={15} />{t('R0 demo uses hand-set rules')}</span>
         </div>
 
         <section id="lp-engine" className="lp-section">

@@ -14,7 +14,7 @@ _OPS = {">=": operator.ge, "<=": operator.le, "==": operator.eq, ">": operator.g
 
 class RulesAdapter(ModelAdapter):
     def __init__(self, config: dict[str, Any], source: dict[str, Any]):
-        self.model_id = config.get("model_id", "R0-demo")
+        self.model_id = config.get("model_id", "demo-rules")
         self.arm = config.get("arm", "R0")
         self.version = str(config.get("version", "0"))
         self.task_id = config.get("task_id", "sim_transaction_risk_demo")

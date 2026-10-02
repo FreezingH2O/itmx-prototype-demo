@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { api, apiUrl, type Json } from '../api'
 import { Icon } from '../icons'
 import { t } from '../i18n'
+import Experiments, { DataScope, MetricRationale } from './Experiments'
 
 type Props = { run: Json; version: number; present: boolean }
 
-// Every number on this page is read from an experiment result bundle. Nothing is typed in.
+// Results come from completed experiment bundles served by the Engine API.
 export default function Results({ present }: Props) {
   const dev = new URLSearchParams(window.location.search).get('dev') === '1'
+  const [population, setPopulation] = useState('hi')
   const [list, setList] = useState<Json | null>(null)
   const [bid, setBid] = useState<string | null>(null)
   const [bundle, setBundle] = useState<Json | null>(null)
@@ -26,8 +28,12 @@ export default function Results({ present }: Props) {
     api.get(`/v1/experiments/${bid}/results${dev ? '?include_dev=true' : ''}`).then(setBundle).catch((e) => setErr(e.message))
   }, [bid, dev])
 
+  const design: Json | null = bundle?.design ?? null
+  const dataset: Json | undefined = design?.dataset_scope?.find((x: Json) => x.key === population) ?? design?.dataset_scope?.[0]
+  const showLi = population === 'li' && bundle?.replication_results?.length
+  const results: Json[] = (showLi ? bundle?.replication_results : bundle?.results) ?? []
+  const comparisons: Json[] = (showLi ? bundle?.replication_comparisons : bundle?.comparisons) ?? []
   const m = bundle?.manifest
-  const results: Json[] = bundle?.results ?? []
   const pos = results.find((r) => r.positive_count !== undefined)
   const limitations: string[] = m?.limitations ?? []
   return (
@@ -37,6 +43,9 @@ export default function Results({ present }: Props) {
           <div className="page-title"><h1>{t('Experiment Results')}</h1></div>
           {!present && <p>{t('Frozen experiment runs, separate from the demo story.')}</p>}
         </div>
+        {design?.dataset_scope?.length > 1 && <select value={population} onChange={(e) => setPopulation(e.target.value)} aria-label={t('Dataset')}>
+          {design.dataset_scope.map((d: Json) => <option key={d.key} value={d.key}>{d.file.replace('_Trans.csv', '')}</option>)}
+        </select>}
         {list?.bundles?.length > 1 && (
           <select value={bid ?? ''} onChange={(e) => setBid(e.target.value)} aria-label={t('Result bundle')}>
             {list.bundles.map((b: Json) => <option key={b.id} value={b.id}>{b.id} ({b.status})</option>)}
@@ -58,18 +67,21 @@ export default function Results({ present }: Props) {
       )}
 
       <div className="grid" style={{ gap: 16 }}>
+        {design && <DataScope design={design} />}
+        {design && dataset && results.length > 0 && <MetricRationale design={design} results={results} dataset={dataset} />}
         <div className="results-top">
           <RecallChart results={results} />
           <div className="card">
             <div className="card-head"><span className="caps">{t('Run provenance')}</span>{m && <span className={`pill ${m.status === 'completed' ? 'good' : 'amber'}`}>{m.status}</span>}</div>
             <dl className="kv right">
-              <dt>{t('Run ID')}</dt><dd>{m ? <code>{m.run_id}</code> : '–'}</dd>
-              <dt>{t('Dataset / version')}</dt><dd>{m ? `${m.dataset?.id ?? ''} ${m.dataset?.version ?? ''}` : '–'}</dd>
+              <dt>{t('Run ID')}</dt><dd>{m?.run_id ? <code>{m.run_id}</code> : t('Not recorded')}</dd>
+              <dt>{t('Dataset / version')}</dt><dd>{dataset ? `${dataset.file} · v${dataset.version_proposed}` : m ? `${m.dataset?.id ?? ''} ${m.dataset?.version ?? ''}` : '–'}</dd>
               <dt>{t('Split')}</dt><dd>{m?.split ? (typeof m.split === 'string' ? m.split : JSON.stringify(m.split)) : '–'}</dd>
-              <dt>{t('Eligible / positives')}</dt><dd>{pos ? `${pos.eligible_count ?? '-'} / ${pos.positive_count}` : '–'}</dd>
-              <dt>{t('Parity')}</dt><dd>{bundle?.parity ? `${bundle.parity.status} (${bundle.parity.arm})` : '–'}</dd>
+              <dt>{t('Eligible / positives')}</dt><dd>{pos ? `${pos.eligible_count?.toLocaleString() ?? '-'} / ${pos.positive_count?.toLocaleString() ?? '-'}` : '–'}</dd>
+              {m?.hardware && <><dt>{t('Hardware')}</dt><dd>{m.hardware}</dd></>}
+              <dt>{t('Parity')}</dt><dd>{bundle?.parity ? `${bundle.parity.status} (${bundle.parity.arm})` : t('Not evaluated')}</dd>
             </dl>
-            <div className="small muted" style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 10 }}>{t('Populated from the experiment bundle.')}</div>
+            <div className="small muted" style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 10 }}>{dataset ? t('Prevalence {p} from the publisher rate. Review budget: top 1% of test transactions, the same workload for every model.', { p: `${(dataset.assumed_prevalence * 100).toFixed(3)}%` }) : t('Populated from the experiment bundle.')}</div>
             {bundle?.failures?.length > 0 && <>
               <div className="section-label">{t('Failed or deferred')}</div>
               <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{bundle.failures.map((f: Json, i: number) => <li key={i}>{typeof f === 'string' ? f : JSON.stringify(f)}</li>)}</ul>
@@ -78,7 +90,8 @@ export default function Results({ present }: Props) {
         </div>
 
         {bundle ? <MetricsTable results={results} /> : <StatusTable arms={list?.template_arms ?? []} />}
-        {bundle?.comparisons?.length > 0 && <Comparisons rows={bundle.comparisons} />}
+        {comparisons.length > 0 && <Comparisons rows={comparisons} />}
+        {bundle && !showLi && <Experiments results={results} sample={bundle.sample ?? null} />}
         {bundle?.figures?.length > 0 && !present && (
           <div className="card"><div className="card-head"><span className="caps">{t('Exported figures')}</span></div>
             <div className="grid cols-2">{bundle.figures.map((f: string) => <img key={f} alt={f} style={{ maxWidth: '100%' }} src={apiUrl(`/v1/experiments/${bundle.id}/figures/${f}`)} />)}</div></div>
@@ -97,9 +110,8 @@ export default function Results({ present }: Props) {
             <div className="card-head"><span className="caps">{t('Limitations')}</span></div>
             <ul className="lim">
               <li><Icon name="database" size={20} />{t('Synthetic demo; no live bank or chain connection')}</li>
-              <li><Icon name="gear" size={20} />{t('R0-demo uses hand-set rules')}</li>
               {!bundle && <li><Icon name="file" size={20} />{t('No completed benchmark results loaded')}</li>}
-              {limitations.map((x, i) => <li key={i}><Icon name="file" size={20} />{x}</li>)}
+              {limitations.map((x, i) => <li key={i}><Icon name="file" size={20} />{t(x)}</li>)}
             </ul>
             <div className="small muted" style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 10 }}>{t('Development fixtures are excluded from reported results.')}</div>
           </div>
@@ -132,15 +144,16 @@ function ordered(results: Json[]): Json[] {
   return [...results].sort((a, b) => rank(a.arm) - rank(b.arm) || String(a.arm).localeCompare(String(b.arm)))
 }
 
-function pct(x: number | null | undefined) { return x === null || x === undefined ? '-' : `${(x * 100).toFixed(1)}%` }
+function pct(x: number | null | undefined, digits = 1) { return x === null || x === undefined ? '-' : `${(x * 100).toFixed(digits)}%` }
 
 function RecallChart({ results }: { results: Json[] }) {
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
   const budget = results.find((r) => r.review_budget_fraction)?.review_budget_fraction
   return (
     <div className="card">
-      <div className="card-head"><span className="caps">{t('Recall at {b} review budget', { b: budget ? `${budget * 100}%` : '1%' })}</span>
-        <span className="arm-tabs">{['R0', 'L0', 'L1', 'G1', 'G2 when completed'].map((a) => <span key={a}>{t(a)}</span>)}</span></div>
+      <div className="card-head"><span className="caps">{t('Recall: laundering caught in the top {b} reviewed', { b: budget ? `${budget * 100}%` : '1%' })}</span>
+        <span className="arm-tabs">{['R0', 'L0', 'L1', 'G1', 'G2'].map((a) => <span key={a}>{a}</span>)}</span></div>
+      <p className="small muted" style={{ margin: '0 0 12px' }}>{t('Share of real laundering cases that fall inside the top {b} of transactions ranked by risk. Every model gets the same review workload.', { b: budget ? `${budget * 100}%` : '1%' })}</p>
       {results.length === 0 && (
         <div className="empty-state">
           <span className="bubble"><Icon name="chart" size={40} /></span>
@@ -154,7 +167,7 @@ function RecallChart({ results }: { results: Json[] }) {
           const done = r.status === 'completed' && v !== null && v !== undefined
           return (
             <div key={r._file} className="bar-row"
-              onMouseMove={(e) => done && setTip({ x: e.clientX + 12, y: e.clientY + 12, text: `${r.arm}: recall ${pct(v)}, precision ${pct(r.metrics?.precision_at_budget)}, false alerts ${r.metrics?.false_alert_count ?? '-'}, n=${r.eligible_count ?? '-'}` })}
+              onMouseMove={(e) => done && setTip({ x: e.clientX + 12, y: e.clientY + 12, text: `${r.arm}: recall ${pct(v)}, precision ${pct(r.metrics?.precision_at_budget, 2)}, false alerts ${r.metrics?.false_alert_count ?? '-'}, n=${r.eligible_count ?? '-'}` })}
               onMouseLeave={() => setTip(null)}>
               <span>{r.arm}</span>
               <div className="bar-track">{done ? <div className="bar-fill" style={{ width: `${Math.max(1, v * 100)}%` }} /> : <span className="notrun">{t('not completed ({s})', { s: r.status })}</span>}</div>
@@ -171,19 +184,19 @@ function RecallChart({ results }: { results: Json[] }) {
 function MetricsTable({ results }: { results: Json[] }) {
   return (
     <div className="card">
-      <div className="card-head"><span className="caps">{t('Metrics by arm')}</span><span className="sub">{t('table view of the chart, plus resources')}</span></div>
-      <table className="data">
+      <div className="card-head"><span className="caps">{t('Metrics by arm')}</span><span className="sub">{t('Same 1% review workload for every arm; recall = laundering caught ÷ all laundering')}</span></div>
+      <div className="table-scroll"><table className="data">
         <thead><tr><th>{t('Arm')}</th><th>{t('Status')}</th><th>{t('Eligible')}</th><th>{t('Positives')}</th><th>{t('Recall')}</th><th>{t('Precision')}</th><th>{t('False alerts')}</th><th>AP</th><th>{t('Train s')}</th><th>{t('p95 inference ms')}</th></tr></thead>
         <tbody>{ordered(results).map((r) => (
           <tr key={r._file}>
             <td>{r.arm}</td><td>{r.status}</td>
             <td className="r">{r.eligible_count ?? '-'}</td><td className="r">{r.positive_count ?? '-'}</td>
-            <td className="r">{pct(r.metrics?.recall_at_budget)}</td><td className="r">{pct(r.metrics?.precision_at_budget)}</td>
+            <td className="r">{pct(r.metrics?.recall_at_budget)}</td><td className="r">{pct(r.metrics?.precision_at_budget, 2)}</td>
             <td className="r">{r.metrics?.false_alert_count ?? '-'}</td><td className="r">{r.metrics?.average_precision?.toFixed?.(3) ?? '-'}</td>
             <td className="r">{r.resource_usage?.train_seconds ?? '-'}</td><td className="r">{r.resource_usage?.inference_p95_ms ?? '-'}</td>
           </tr>))}
         </tbody>
-      </table>
+      </table></div>
     </div>
   )
 }
@@ -192,9 +205,9 @@ function Comparisons({ rows }: { rows: Json[] }) {
   const cols = Object.keys(rows[0])
   return (
     <div className="card">
-      <div className="card-head"><span className="caps">{t('Paired comparisons')}</span><span className="sub">{t('same cohort and budget; percentage points')}</span></div>
-      <table className="data"><thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-        <tbody>{rows.map((r, i) => <tr key={i}>{cols.map((c) => <td key={c}>{r[c]}</td>)}</tr>)}</tbody></table>
+      <div className="card-head"><span className="caps">{t('Paired comparisons')}</span><span className="sub">{t('same test data and same review workload; difference in percentage points')}</span></div>
+      <div className="table-scroll"><table className="data"><thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}>{cols.map((c) => <td key={c}>{r[c]}</td>)}</tr>)}</tbody></table></div>
     </div>
   )
 }

@@ -159,7 +159,7 @@ export default function App() {
             <span className="chip syn"><i />{t('Synthetic')}</span>
             {recorded
               ? <span className="chip rec"><i />{t('Recorded')} · {run?.recording}</span>
-              : <span className={`chip ${modelError ? 'err' : 'live'}`}><i />{t(modelError ? 'Model error' : 'Live')} · {run?.model?.model_id ?? 'model'}</span>}
+              : modelError && <span className="chip err"><i />{t('Model error')}</span>}
           </div>
           <div className="player" role="group" aria-label={t('Simulation controls')}>
             <div className="player-time" title={t('Simulated time, not real time')}>

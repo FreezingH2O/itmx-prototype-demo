@@ -25,6 +25,13 @@ def _read_json(p: Path) -> Any:
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
 
+def _read_csv(p: Path) -> list[dict[str, str]]:
+    if not p.exists():
+        return []
+    with p.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
 def sha256(p: Path) -> str:
     h = hashlib.sha256()
     with p.open("rb") as f:
@@ -45,10 +52,13 @@ def load_bundle(path: Path) -> dict[str, Any]:
         r = _read_json(f)
         r["_file"] = f.name
         results.append(r)
-    comparisons = []
-    if (path / "comparisons.csv").exists():
-        with (path / "comparisons.csv").open(encoding="utf-8") as f:
-            comparisons = list(csv.DictReader(f))
+    replication_results = []
+    for f in sorted((path / "replication").glob("*.json")) if (path / "replication").exists() else []:
+        r = _read_json(f)
+        r["_file"] = f.name
+        replication_results.append(r)
+    comparisons = _read_csv(path / "comparisons.csv")
+    replication_comparisons = _read_csv(path / "replication_comparisons.csv")
     presentable = (manifest["status"] in PRESENTABLE_STATUSES
                    and manifest["measurement_type"] in PRESENTABLE_MEASUREMENTS)
     return {
@@ -57,7 +67,11 @@ def load_bundle(path: Path) -> dict[str, Any]:
         "manifest": manifest,
         "feature_manifest": _read_json(path / "feature_manifest.json"),
         "results": results,
+        "replication_results": replication_results,
         "comparisons": comparisons,
+        "replication_comparisons": replication_comparisons,
+        "design": _read_json(path / "design.json"),
+        "sample": _read_json(path / "sample.json"),
         "parity": _read_json(path / "parity.json"),
         "figures": sorted(p.name for p in (path / "figures").glob("*")) if (path / "figures").exists() else [],
         "failures": _read_json(path / "failures.json") or [],

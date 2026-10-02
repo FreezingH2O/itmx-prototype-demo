@@ -55,7 +55,7 @@ def _score_text(state: EngineState, event_id: str) -> Optional[str]:
     p = state.predictions.get(event_id)
     if not p or p.score_status != "computed":
         return None
-    return f"{p.model_id} score {p.score:.2f} ({p.score_semantics})"
+    return f"Risk score {p.score:.2f} ({p.score_semantics})"
 
 
 def _high_by_score(state: EngineState, event_ids: list[str], threshold: Optional[float]) -> bool:

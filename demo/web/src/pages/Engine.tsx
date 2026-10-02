@@ -86,17 +86,7 @@ export default function EnginePage({ run, version, present, compact }: Props) {
           <div className="card side-card">
             <div className="card-head"><span className="caps">{t('Model')}</span>
               <span className={`pill ${down ? 'bad' : 'good'}`}>● {t(down ? 'Unavailable' : 'Ready')}</span></div>
-            {model && <>
-              <div className="model-id">
-                <span className="db"><Icon name="database" size={26} /></span>
-                <div>
-                  <b style={{ fontSize: '1.05rem' }}>{model.model_id ?? 'none'} · {model.version}</b>
-                  <div className="small">{model.source?.kind === 'bundle' ? t('Experiment bundle {id}', { id: model.source.bundle_id }) : t('Hand-set demo rules')}</div>
-                  <div className="small">{t('Features: {v}', { v: model.feature_version })}</div>
-                </div>
-              </div>
-              <div className="small muted" style={{ marginTop: 10 }}>{t('Transaction ranking score; not a probability.')}</div>
-            </>}
+            {model && <div className="small muted">{t('Transaction ranking score; not a probability.')}</div>}
           </div>
 
           <div className="card side-card">
@@ -262,7 +252,7 @@ function Selected({ sel, graph, predictions, down }: { sel: GraphSel; graph: Jso
         </dl>
         <div className="ring">
           <ScoreRing score={score} />
-          <span>{score === null ? t(down ? 'model unavailable' : (e.score_status ?? 'not scored').replace(/_/g, ' ')) : t('{m} ranking score', { m: e.model_id })}</span>
+          <span>{score === null ? t(down ? 'model unavailable' : (e.score_status ?? 'not scored').replace(/_/g, ' ')) : t('Ranking score')}</span>
         </div>
         <div className="reasons">
           <b>{t('Top weighted reasons')}</b>

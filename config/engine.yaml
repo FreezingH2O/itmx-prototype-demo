@@ -8,10 +8,10 @@ active_model:
 # Bundle statuses that may be loaded. Add "dev_fixture" only for plumbing tests.
 allow_bundle_statuses: [completed, inconclusive]
 
-# R0-demo: hand-set thresholds for the demo, NOT fitted on data. Replace with the
+# demo-rules: hand-set thresholds for the demo, NOT fitted on data. Replace with the
 # experiment's fitted R0 or a LightGBM arm when the bundle is ready.
 rules:
-  model_id: R0-demo
+  model_id: demo-rules
   arm: R0
   version: "demo-1"
   task_id: sim_transaction_risk_demo

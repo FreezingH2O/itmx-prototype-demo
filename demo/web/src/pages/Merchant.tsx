@@ -27,6 +27,9 @@ const NEXT_TH: Record<string, string> = {
 }
 const TH_MONTH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
 
+// The merchant's own bank, from its account id (acct:bank_e:E-1228 -> E).
+const bankLetter = (run: Json) => (run.merchant_account_id?.split(':')[1] ?? 'bank_b').replace('bank_', '').toUpperCase()
+
 function thDate(iso: string): string {
   const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
   return `${d} ${TH_MONTH[m - 1]} ${y + 543} • ${iso.slice(11, 16)}`
@@ -106,7 +109,7 @@ function Phone({ data, r, run, role, clock }: { data: Json; r: Json | undefined;
     <div className="phone">
       <div className="phone-notch" />
       <div className="phone-status"><span>{hm(clock)}</span><span style={{ letterSpacing: 2 }}>▮▮▮ ◔</span></div>
-      <div className="phone-bar"><b>แอปธนาคาร B (จำลอง)</b><div>Synthetic</div></div>
+      <div className="phone-bar"><b>แอปธนาคาร {bankLetter(run)} (จำลอง)</b><div>Synthetic</div></div>
       <div className="phone-body">
         <div className="acct">
           <span className="av"><Icon name="store" size={22} /></span>
@@ -179,7 +182,7 @@ function RestrictionCard({ r, run, role, fixtures }: { r: Json; run: Json; role:
             {fixtures.map((f) => <option key={f.fixture_ref} value={f.fixture_ref}>{f.title}</option>)}
           </select>
           <button className="primary" disabled={busy || !fixture} onClick={submit}>ส่งหลักฐาน</button>
-          <div className="xs muted" style={{ textAlign: 'center', marginTop: 6 }}>การส่งหลักฐานไม่ได้ปลดยอดอัตโนมัติ<br />ผู้รับผิดชอบ: ทีมทบทวนธนาคาร B</div>
+          <div className="xs muted" style={{ textAlign: 'center', marginTop: 6 }}>การส่งหลักฐานไม่ได้ปลดยอดอัตโนมัติ<br />ผู้รับผิดชอบ: ทีมทบทวนธนาคาร {bankLetter(run)}</div>
           {err && <div className="callout bad"><Icon name="alert" size={16} />{err}</div>}
         </div>
       )}

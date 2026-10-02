@@ -1,32 +1,30 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, newKey, type Json } from '../api'
-import { ACTION_LABEL, SHORT_ACTION, hm, money, recStatus, shortId, thb, time, usdt } from '../format'
+import { ACTION_LABEL, SHORT_ACTION, hm, instName, money, recStatus, shortId, thb, time, usdt } from '../format'
 import { Icon } from '../icons'
-import { useView } from '../useRun'
+import { useViews } from '../useRun'
 
 type Props = { run: Json; version: number; present: boolean; compact?: boolean }
-type Org = 'bank_a' | 'bank_b' | 'exchange'
+type Org = string
 type Sel = { org: Org; seq: number } | null
-const ORGS: { id: Org; name: string }[] = [
-  { id: 'bank_a', name: 'Bank A' },
-  { id: 'bank_b', name: 'Bank B' },
-  { id: 'exchange', name: 'Exchange' },
-]
-const NAME: Record<Org, string> = { bank_a: 'Bank A', bank_b: 'Bank B', exchange: 'Exchange' }
+const DEFAULT_ORGS: Org[] = ['bank_a', 'bank_b', 'exchange']
+const NAME = instName
+// Large scenarios: how many cards a panel shows before pointing to the full view.
+const PANEL_LIMIT = 3
 
 export default function Institutions({ run, version, present, compact }: Props) {
-  const a = useView<Json>(`/v1/runs/${run.run_id}/views/bank_a`, version).data
-  const b = useView<Json>(`/v1/runs/${run.run_id}/views/bank_b`, version).data
-  const x = useView<Json>(`/v1/runs/${run.run_id}/views/exchange`, version).data
-  const views: Record<Org, Json> = { bank_a: a, bank_b: b, exchange: x }
+  const orgs: Org[] = run.institutions ?? DEFAULT_ORGS
+  const large = !!run.large
+  const fetched = useViews<Json>(orgs.map((o) => `/v1/runs/${run.run_id}/views/${o}`), version)
+  const views: Record<Org, Json> = Object.fromEntries(orgs.map((o) => [o, fetched[`/v1/runs/${run.run_id}/views/${o}`]]))
   const [sel, setSel] = useState<Sel>(null)
   const [expanded, setExpanded] = useState<Org | null>(null)
 
   // Default inspector selection: the most recent event the engine scored.
-  const fallback = latestScored(views)
+  const fallback = latestScored(views, orgs)
   const active = sel ?? fallback
   const pick = (org: Org) => (seq: number) => setSel({ org, seq })
-  const panelProps = (org: Org) => ({ org, data: views[org], run, present, sel: active, onSelect: pick(org), onExpand: () => setExpanded(org) })
+  const panelProps = (org: Org) => ({ org, data: views[org], run, present, sel: active, onSelect: pick(org), onExpand: () => setExpanded(org), limit: large ? PANEL_LIMIT : undefined })
 
   return (
     <div className="page">
@@ -38,44 +36,65 @@ export default function Institutions({ run, version, present, compact }: Props) 
           </div>
         </div>
       )}
+      {large && !compact && <Workload orgs={orgs} views={views} run={run} />}
       <div className="grid cols-3">
-        <BankAPanel {...panelProps('bank_a')} />
-        <BankBPanel {...panelProps('bank_b')} />
-        <ExchangePanel {...panelProps('exchange')} />
+        {large
+          ? orgs.map((o) => o === 'exchange' ? <ExchangePanel key={o} {...panelProps(o)} /> : <BankBPanel key={o} {...panelProps(o)} />)
+          : <>
+            <BankAPanel {...panelProps('bank_a')} />
+            <BankBPanel {...panelProps('bank_b')} />
+            <ExchangePanel {...panelProps('exchange')} />
+          </>}
       </div>
       {!compact && <div className="card" style={{ marginTop: 16 }}><Inspector views={views} sel={active} present={present} /></div>}
       {!compact && <div className="foot-note">Prototype design · Synthetic data</div>}
       {expanded && views[expanded] && (
-        <Expanded org={expanded} data={views[expanded]} views={views} run={run} present={present}
+        <Expanded org={expanded} data={views[expanded]} views={views} orgs={orgs} run={run} present={present}
           sel={active?.org === expanded ? active : null} onSelect={pick(expanded)} onClose={() => setExpanded(null)} />
       )}
     </div>
   )
 }
 
-function latestScored(views: Record<Org, Json>): Sel {
+function latestScored(views: Record<Org, Json>, orgs: Org[]): Sel {
   let best: { org: Org; seq: number; t: string } | null = null
-  for (const o of ORGS) {
-    for (const f of views[o.id]?.feed ?? []) {
+  for (const o of orgs) {
+    for (const f of views[o]?.feed ?? []) {
       if (!f.assessment_id) continue
-      if (!best || f.sim_time >= best.t) best = { org: o.id, seq: f.seq, t: f.sim_time }
+      if (!best || f.sim_time >= best.t) best = { org: o, seq: f.seq, t: f.sim_time }
     }
   }
   return best ? { org: best.org, seq: best.seq } : null
 }
 
+// Large scenarios: officer workload across every institution, the point of the scale demo.
+function Workload({ orgs, views, run }: { orgs: Org[]; views: Record<Org, Json>; run: Json }) {
+  const waiting = (o: Org) => live(views[o]?.recommendations ?? []).filter((r) => canAct(r, run) && r.action_type !== 'EXISTING_CONTROLS_ONLY').length
+  const total = orgs.reduce((s, o) => s + waiting(o), 0)
+  return (
+    <div className="stat-row" style={{ marginBottom: 16 }}>
+      <div className="stat"><span className="lbl">Awaiting an officer</span><b className={total ? 'amber' : ''}>{total}</b></div>
+      {orgs.map((o) => <div key={o} className="stat"><span className="lbl">{NAME(o)}</span><b>{waiting(o)}</b></div>)}
+    </div>
+  )
+}
+
 /* ---------------- shared pieces */
 
-type PanelProps = { org: Org; data: Json; run: Json; present: boolean; sel: Sel; onSelect: (seq: number) => void; onExpand: () => void }
+type PanelProps = { org: Org; data: Json; run: Json; present: boolean; sel: Sel; onSelect: (seq: number) => void; onExpand: () => void; limit?: number }
+
+function More({ n, onExpand }: { n: number; onExpand: () => void }) {
+  return n > 0 ? <button className="ghost small" onClick={onExpand} style={{ marginTop: 6 }}>+{n} more in full view</button> : null
+}
 
 function PanelHead({ org, onExpand }: { org: Org; onExpand: () => void }) {
   return (
     <div className="inst-head">
       <span className="inst-ico"><Icon name="bank" size={24} /></span>
-      <span className="inst-name">{NAME[org]}</span>
+      <span className="inst-name">{NAME(org)}</span>
       <span className="tag">Simulated client</span>
       <span className="grow" />
-      <button className="icon-btn" onClick={onExpand} title={`Open ${NAME[org]} full view`} aria-label={`Expand ${NAME[org]}`}>
+      <button className="icon-btn" onClick={onExpand} title={`Open ${NAME(org)} full view`} aria-label={`Expand ${NAME(org)}`}>
         <Icon name="expand" size={17} />
       </button>
     </div>
@@ -246,7 +265,7 @@ function BankAPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
 
 /* ---------------- Bank B */
 
-function BankBPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
+function BankBPanel({ org, data, run, sel, onSelect, onExpand, limit }: PanelProps) {
   if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
   const recs = live(data.recommendations)
   const queue = data.review_queue.filter((q: Json) => q.status === 'active' || q.review_state !== 'released')
@@ -256,18 +275,21 @@ function BankBPanel({ org, data, run, sel, onSelect, onExpand }: PanelProps) {
   const main = recs.filter((r) => isMain(r) && !inQueue.has(r.subject_id) && canAct(r, run))
   const others = recs.filter((r) => !main.includes(r) && !(inQueue.has(r.subject_id)))
   const pending = lastQ.length > 0 || main.length > 0
+  const cap = <T,>(xs: T[], n = limit) => (n === undefined ? xs : xs.slice(0, n))
+  const hidden = limit === undefined ? 0 : Math.max(0, lastQ.length - 1) + Math.max(0, main.length - limit) + Math.max(0, others.length - limit * 2)
   return (
     <div className={`card inst-col ${pending ? 'focus' : ''}`}>
       <PanelHead org={org} onExpand={onExpand} />
-      {lastQ.map((q: Json) => <ReviewCard key={q.restriction_id} q={q} data={data} run={run} />)}
-      {main.map((r) => <RecCard key={r.recommendation_id} rec={r} org={org} run={run} onExpand={onExpand} />)}
+      {cap(lastQ, limit === undefined ? undefined : 1).map((q: Json) => <ReviewCard key={q.restriction_id} q={q} data={data} org={org} run={run} />)}
+      {cap(main).map((r) => <RecCard key={r.recommendation_id} rec={r} org={org} run={run} onExpand={onExpand} />)}
       {!pending && (
         <div className="box">
           <div className="card-title" style={{ marginBottom: 6 }}><span className="ico"><Icon name="list" /></span>Review queue</div>
           <div className="empty">No restriction under review.</div>
         </div>
       )}
-      <LinkCards recs={others} onExpand={onExpand} />
+      <LinkCards recs={cap(others, limit === undefined ? undefined : limit * 2)} onExpand={onExpand} />
+      <More n={hidden} onExpand={onExpand} />
       {!pending && !others.length && (
         <div className="box">
           <div className="card-title" style={{ marginBottom: 8 }}><span className="ico"><Icon name="file" /></span>Transaction feed</div>
@@ -286,7 +308,7 @@ const HIST_LABEL: Record<string, string> = {
   released: 'Hold released',
 }
 
-function ReviewCard({ q, data, run }: { q: Json; data: Json; run: Json }) {
+function ReviewCard({ q, data, org, run }: { q: Json; data: Json; org: Org; run: Json }) {
   const [reason, setReason] = useState('Reviewed evidence pack')
   const acct = data.accounts.find((a: Json) => a.account_id === q.account_id)
   const rec = [...data.recommendations].reverse().find((r: Json) => r.target_scope?.restriction_id === q.restriction_id && r.status !== 'superseded')
@@ -321,7 +343,7 @@ function ReviewCard({ q, data, run }: { q: Json; data: Json; run: Json }) {
         <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           <div className="row"><b>Officer console</b><span className="xs muted">Scope: <b className="amber">{thb(q.amount_minor)} only</b></span></div>
           <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Decision reason" style={{ width: '100%', marginTop: 8 }} />
-          <ActionButtons rec={rec} org="bank_b" run={run} reason={reason} />
+          <ActionButtons rec={rec} org={org} run={run} reason={reason} />
         </div>
       )}
       <div style={{ marginTop: 12 }}>
@@ -366,7 +388,7 @@ const WD_STATE: Record<string, [string, string]> = {
   broadcast: ['Broadcast on chain', 'bad'],
 }
 
-function ExchangePanel({ org, data, run, onExpand }: PanelProps) {
+function ExchangePanel({ org, data, run, onExpand, limit }: PanelProps) {
   if (!data) return <div className="card"><PanelHead org={org} onExpand={onExpand} /><div className="empty">Loading…</div></div>
   const recs = live(data.recommendations)
   const wd = data.withdrawals[data.withdrawals.length - 1]
@@ -374,7 +396,8 @@ function ExchangePanel({ org, data, run, onExpand }: PanelProps) {
   const others = recs.filter((r) => r !== wdRec)
   const refs = depositRefs(data)
   const verified = verifiedCustomers(data)
-  const deposits = data.feed.filter((f: Json) => f.summary?.startsWith('deposit'))
+  const allDeposits = data.feed.filter((f: Json) => f.summary?.startsWith('deposit'))
+  const deposits = limit === undefined ? allDeposits : allDeposits.slice(-limit * 2)
   const pending = !!(wdRec && canAct(wdRec, run))
   const wdDecisions = data.decisions.filter((d: Json) => wdRec && d.recommendation_id === wdRec.recommendation_id)
   return (
@@ -415,7 +438,8 @@ function ExchangePanel({ org, data, run, onExpand }: PanelProps) {
           )
         })}
       </div>
-      <LinkCards recs={others} onExpand={onExpand} />
+      <LinkCards recs={limit === undefined ? others : others.slice(-limit * 2)} onExpand={onExpand} />
+      {limit !== undefined && <More n={Math.max(0, others.length - limit * 2) + Math.max(0, allDeposits.length - deposits.length)} onExpand={onExpand} />}
     </div>
   )
 }
@@ -503,7 +527,7 @@ function Inspector({ views, sel, present }: { views: Record<Org, Json>; sel: Sel
 /* ---------------- Full-screen institution view */
 
 function Expanded({ org, data, views, run, present, sel, onSelect, onClose }: {
-  org: Org; data: Json; views: Record<Org, Json>; run: Json; present: boolean; sel: Sel; onSelect: (seq: number) => void; onClose: () => void
+  org: Org; data: Json; views: Record<Org, Json>; orgs: Org[]; run: Json; present: boolean; sel: Sel; onSelect: (seq: number) => void; onClose: () => void
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -521,10 +545,10 @@ function Expanded({ org, data, views, run, present, sel, onSelect, onClose }: {
     : [['Accounts', data.accounts.length], ['Amount held', thb(restricted)], ['Awaiting officer', open], ['Decisions recorded', data.decisions.length]]
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${NAME[org]} full view`}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${NAME(org)} full view`}>
         <div className="sheet-head">
           <span className="inst-ico"><Icon name="bank" size={24} /></span>
-          <span className="inst-name">{NAME[org]}</span>
+          <span className="inst-name">{NAME(org)}</span>
           <span className="tag">Simulated client</span>
           <span className="sub">Everything this institution's system sees and sent at {time(run.clock.now)}</span>
           <span className="grow" />
@@ -536,7 +560,7 @@ function Expanded({ org, data, views, run, present, sel, onSelect, onClose }: {
           </div>
           <div className="sheet-grid">
             <div className="stack">
-              {org === 'bank_b' && data.review_queue.map((q: Json) => <ReviewCard key={q.restriction_id} q={q} data={data} run={run} />)}
+              {org !== 'exchange' && data.review_queue.map((q: Json) => <ReviewCard key={q.restriction_id} q={q} data={data} org={org} run={run} />)}
               <div className="card">
                 <div className="card-head"><span className="card-title"><span className="ico"><Icon name="file" /></span>Recommendations</span><span className="sub">{recs.length} received</span></div>
                 {recs.length === 0 ? <div className="empty">No recommendations yet.</div> : recs.map((r) => <RecFull key={r.recommendation_id} rec={r} org={org} run={run} />)}

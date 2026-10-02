@@ -23,6 +23,7 @@ from src.contracts import (
     Recommendation,
 )
 from src.engine import trace as tracing
+from src.features import sim_local
 from src.features.registry import get_builder
 from src.linking.linker import relink
 from src.models.base import ModelAdapter
@@ -124,7 +125,10 @@ def score_event(state: EngineState, e: Event, ctx: EngineContext) -> Optional[Pr
     else:
         m = ctx.model
         builder, _ = get_builder(m.feature_version)
-        row = builder(state.events.values(), e)
+        # sim-local features only read transfers of the sender or receiver; other builders get every event.
+        events = (state.ix().touching(e.from_ref, e.to_ref) if m.feature_version == sim_local.FEATURE_VERSION
+                  else state.events.values())
+        row = builder(events, e)
         score = m.score([row])[0]
         pred = Prediction(event_id=e.event_id, as_of=e.available_at, task_id=m.task_id, model_id=m.model_id,
                           model_version=m.version, feature_version=m.feature_version, score=score,
@@ -156,7 +160,7 @@ def ingest(state: EngineState, items: list[EventIn], now: datetime, ctx: EngineC
         state.ingest_seq += 1
         ev = Event(**item.model_dump(), event_id=eid, payload_hash=h, ingest_seq=state.ingest_seq,
                    ingested_sim_time=now)
-        state.events[eid] = ev
+        state.add_event(ev)
         _register_entities(state, ev)
         ctx.audit("event", eid, ev.model_dump(mode="json"))
         new_events.append(ev)
@@ -164,32 +168,92 @@ def ingest(state: EngineState, items: list[EventIn], now: datetime, ctx: EngineC
                         "detail": None})
     for ev in new_events:
         score_event(state, ev, ctx)
+    touched = {r for ev in new_events for r in (ev.from_ref, ev.to_ref) if r}
     for link in relink(state, now):
         ctx.audit("link", link.link_id, link.model_dump(mode="json"))
+        touched.update(x for x in (link.from_id, link.to_id) if x)
     for ev in new_events:
         if ev.event_type == "external_signal" and ev.to_ref and ev.to_ref.startswith("acct:"):
             open_case(state, ev, now, ctx)
     if new_events:
-        reassess_open_cases(state, now, ctx)
+        # Events without parties (withdrawal state) or that relabel entities may change any case.
+        everything = any(ev.event_type in GLOBAL_EVENT_TYPES for ev in new_events)
+        reassess_open_cases(state, now, ctx, None if everything else touched)
+        merge_cases(state, now, ctx)
     return results
+
+
+GLOBAL_EVENT_TYPES = {"withdrawal_state", "address_label"}
+RELAY_SHARE = 0.8   # a receiver that sent on at least this share of what it got is a pass-through
 
 
 # ---------------------------------------------------------------- cases
 
 def open_case(state: EngineState, signal: Event, now: datetime, ctx: EngineContext) -> Case:
-    for c in state.cases.values():
-        if c.origin_subject == signal.to_ref and c.status == "open":
-            return c
-    case = Case(case_id=state.next_id("CASE"), opened_at=now, trigger_event_id=signal.event_id,
-                origin_subject=signal.to_ref)
-    state.cases[case.case_id] = case
+    """A report on an account already reached by an open case joins that case; otherwise a new case."""
+    open_cases = [c for c in state.cases.values() if c.status == "open"]
+    case = next((c for c in open_cases if signal.to_ref in c.origins()), None) or next(
+        (c for c in open_cases if signal.to_ref in c.scope_entities), None)
+    if case is None:
+        case = Case(case_id=state.next_id("CASE"), opened_at=now, trigger_event_id=signal.event_id,
+                    origin_subject=signal.to_ref, origin_subjects=[signal.to_ref],
+                    trigger_event_ids=[signal.event_id])
+        state.cases[case.case_id] = case
+    else:
+        case.origin_subjects = case.origins() + ([signal.to_ref] if signal.to_ref not in case.origins() else [])
+        case.trigger_event_ids = case.triggers() + [signal.event_id]
     ctx.audit("case", case.case_id, case.model_dump(mode="json"))
     return case
 
 
-def reassess_open_cases(state: EngineState, now: datetime, ctx: EngineContext) -> list[Assessment]:
+def live_case(state: EngineState, case_id: str) -> Case:
+    """The open case a (possibly merged) case id now belongs to."""
+    case = state.cases[case_id]
+    while case.merged_into:
+        case = state.cases[case.merged_into]
+    return case
+
+
+def merge_cases(state: EngineState, now: datetime, ctx: EngineContext) -> list[Case]:
+    """Merge open cases that share a reported account, a pass-through account or an exchange customer.
+
+    Sharing an end receiver (a shop paid by two unrelated networks) is not enough to merge.
+    """
+    survivors: list[Case] = []
+    while True:
+        open_cases = sorted((c for c in state.cases.values() if c.status == "open"),
+                            key=lambda c: (c.opened_at, c.case_id))
+        pair = None
+        for i, a in enumerate(open_cases):
+            key_a, scope_a = set(a.relay_entities) | set(a.origins()), set(a.scope_entities)
+            for b in open_cases[i + 1:]:
+                key_b = set(b.relay_entities) | set(b.origins())
+                if key_a & key_b or scope_a.intersection(b.origins()) or set(b.scope_entities).intersection(a.origins()):
+                    pair = (a, b)
+                    break
+            if pair:
+                break
+        if pair is None:
+            return survivors
+        a, b = pair
+        a.origin_subjects = a.origins() + [o for o in b.origins() if o not in a.origins()]
+        a.trigger_event_ids = a.triggers() + [t for t in b.triggers() if t not in a.triggers()]
+        a.merged_case_ids = a.merged_case_ids + [b.case_id] + b.merged_case_ids
+        b.status, b.merged_into = "closed", a.case_id
+        ctx.audit("case", b.case_id, b.model_dump(mode="json"))
+        assess_case(state, a, now, ctx, force=True)
+        ctx.audit("case", a.case_id, a.model_dump(mode="json"))
+        survivors.append(a)
+
+
+def reassess_open_cases(state: EngineState, now: datetime, ctx: EngineContext,
+                        touched: Optional[set[str]] = None) -> list[Assessment]:
+    """Reassess open cases. With `touched`, only cases that are new or include a touched entity."""
     out = []
     for case in list(state.cases.values()):
+        if touched is not None and case.latest_assessment_id is not None and not (
+                case.origin_subject in touched or touched.intersection(case.scope_entities)):
+            continue
         if case.status == "open":
             a = assess_case(state, case, now, ctx)
             if a:
@@ -198,7 +262,8 @@ def reassess_open_cases(state: EngineState, now: datetime, ctx: EngineContext) -
 
 
 def _rec_key(case_id: str, p: dict[str, Any]) -> str:
-    sig = json.dumps({"c": case_id, "i": p["institution"], "s": p["subject_id"], "a": p["action_type"],
+    # Case id is not part of the key: after a merge, the same advice from either case is one recommendation.
+    sig = json.dumps({"i": p["institution"], "s": p["subject_id"], "a": p["action_type"],
                       "t": p["target_scope"]}, sort_keys=True, default=str)
     return hashlib.sha256(sig.encode()).hexdigest()[:16]
 
@@ -212,6 +277,9 @@ def assess_case(state: EngineState, case: Case, now: datetime, ctx: EngineContex
     h = hashlib.sha256(content.encode()).hexdigest()
     case.scope_entities = tr["scope_entities"]
     case.scope_events = tr["scope_events"]
+    case.relay_entities = [a for a, n in tr["accounts"].items() if n["role"] == "receiver" and n["received_minor"]
+                           and n["onward_minor"] >= RELAY_SHARE * n["received_minor"]] + [
+        c for c, v in tr["customers"].items() if any(state.links[l].status == "verified" for l in v["links"])]
     if not force and state.case_content_hash.get(case.case_id) == h:
         return None
     state.case_content_hash[case.case_id] = h
@@ -219,11 +287,19 @@ def assess_case(state: EngineState, case: Case, now: datetime, ctx: EngineContex
     aid = state.next_id("ASMT")
     rec_ids: list[str] = []
     active_keys: set[str] = set()
+    family = case.family()
+    rank = {"acknowledged": 0, "delivered": 1}
+    by_key: dict[str, Recommendation] = {}   # one recommendation per key; prefer acted-on, then oldest
+    for r in state.recommendations.values():
+        if r.case_id in family:
+            k = r.target_scope.get("_key")
+            cur = by_key.get(k)
+            if cur is None or rank.get(r.status, 2) < rank.get(cur.status, 2):
+                by_key[k] = r
     for p in proposal["recommendations"]:
         key = _rec_key(case.case_id, p)
         active_keys.add(key)
-        existing = next((r for r in state.recommendations.values()
-                         if r.case_id == case.case_id and r.target_scope.get("_key") == key), None)
+        existing = by_key.get(key)
         if existing and existing.status in ("delivered", "acknowledged"):
             rec_ids.append(existing.recommendation_id)
             continue
@@ -234,11 +310,13 @@ def assess_case(state: EngineState, case: Case, now: datetime, ctx: EngineContex
             rationale=p.get("rationale", []), evidence_refs=p.get("evidence_refs", []),
             policy_version=ctx.policy["policy_version"], created_at=now, expires_at=p.get("expires_at"))
         state.recommendations[rec.recommendation_id] = rec
+        by_key[key] = rec
         ctx.audit("recommendation", rec.recommendation_id, rec.model_dump(mode="json"))
         rec_ids.append(rec.recommendation_id)
     # Supersede delivered (not yet decided) recommendations the new assessment no longer makes.
     for r in state.recommendations.values():
-        if r.case_id == case.case_id and r.status == "delivered" and r.target_scope.get("_key") not in active_keys:
+        if r.case_id in family and r.status == "delivered" and (
+                r.target_scope.get("_key") not in active_keys or by_key.get(r.target_scope.get("_key")) is not r):
             r.status = "superseded"
             ctx.audit("recommendation", r.recommendation_id, r.model_dump(mode="json"))
 
@@ -264,10 +342,8 @@ def assess_subject(state: EngineState, subject_id: str, now: datetime, ctx: Engi
     if not ctx.model_ready:
         raise EngineUnavailable("model unavailable; existing institution controls apply")
     t0 = time.perf_counter()
-    case = next((c for c in state.cases.values()
-                 if subject_id in c.scope_events or subject_id in c.scope_entities), None)
-    if case is None and subject_id.startswith("wd:"):
-        case = next((c for c in state.cases.values() if subject_id in c.scope_entities), None)
+    open_cases = [c for c in state.cases.values() if c.status == "open"]
+    case = next((c for c in open_cases if subject_id in c.scope_events or subject_id in c.scope_entities), None)
     evidence: list[EvidenceItem] = []
     risk, status, task = None, "out_of_scope", ctx.model.task_id
     ev = state.events.get(subject_id)
@@ -286,8 +362,9 @@ def assess_subject(state: EngineState, subject_id: str, now: datetime, ctx: Engi
     if case:
         if case.latest_assessment_id is None:
             assess_case(state, case, now, ctx, force=True)
+        family = case.family()
         rec_ids = [r.recommendation_id for r in state.recommendations.values()
-                   if r.case_id == case.case_id and r.status in ("delivered", "acknowledged")
+                   if r.case_id in family and r.status in ("delivered", "acknowledged")
                    and (institution is None or r.institution == institution)]
         evidence.append(EvidenceItem(kind="case", text=f"Part of {case.case_id}", refs=[case.case_id]))
     else:

@@ -9,6 +9,11 @@ export function baht(minor: number | null | undefined): string {
   return `฿${(minor / 100).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+// bank_c -> Bank C, exchange -> Exchange
+export function instName(org: string): string {
+  return org === 'exchange' ? 'Exchange' : org.replace(/^bank_(\w)$/, (_, c: string) => `Bank ${c.toUpperCase()}`)
+}
+
 export function time(iso: string | null | undefined): string {
   if (!iso) return '-'
   return iso.slice(11, 19)

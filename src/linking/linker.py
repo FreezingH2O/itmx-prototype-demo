@@ -16,16 +16,14 @@ CANDIDATE_WINDOW = timedelta(minutes=60)
 
 
 def _settlement_transfers(state: EngineState, as_of: datetime) -> list[Event]:
-    return [e for e in state.events.values()
-            if e.event_type == "bank_transfer" and e.available_at <= as_of
-            and e.attributes.get("to_account_kind") == "exchange_settlement"]
+    return [e for e in state.ix().settlement_in if e.available_at <= as_of]
 
 
 def relink(state: EngineState, as_of: datetime) -> list[Link]:
     """Recompute deposit links visible at as_of. Returns links whose status changed."""
     changed: list[Link] = []
     transfers = _settlement_transfers(state, as_of)
-    deposits = [e for e in state.events.values() if e.event_type == "exchange_deposit" and e.available_at <= as_of]
+    deposits = [e for e in state.ix().by_type.get("exchange_deposit", ()) if e.available_at <= as_of]
     verified_transfer_ids = set()
     proposals: dict[str, Link] = {}
     for d in sorted(deposits, key=lambda e: e.ingest_seq):

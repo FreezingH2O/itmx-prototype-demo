@@ -4,10 +4,11 @@ Engine code receives only EngineState; simulated institutions own SimState.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from src.contracts import (
     Assessment,
@@ -21,6 +22,43 @@ from src.contracts import (
     Recommendation,
     Restriction,
 )
+
+
+class EventIndex:
+    """Lookup tables over EngineState.events, kept in ingest order. Derived data, never serialized."""
+
+    def __init__(self, events: dict[str, Event]):
+        self.n = 0
+        self.out_by: dict[str, list[Event]] = defaultdict(list)       # bank transfers by sender
+        self.in_by: dict[str, list[Event]] = defaultdict(list)        # bank transfers by receiver
+        self.chain_out_by: dict[str, list[Event]] = defaultdict(list)
+        self.by_type: dict[str, list[Event]] = defaultdict(list)      # every non-transfer event type
+        self.settlement_in: list[Event] = []
+        for e in events.values():
+            self.add(e)
+
+    def add(self, e: Event) -> None:
+        self.n += 1
+        if e.event_type == "bank_transfer":
+            self.out_by[e.from_ref].append(e)
+            self.in_by[e.to_ref].append(e)
+            if e.attributes.get("to_account_kind") == "exchange_settlement":
+                self.settlement_in.append(e)
+            return
+        self.by_type[e.event_type].append(e)
+        if e.event_type == "chain_transfer":
+            self.chain_out_by[e.from_ref].append(e)
+
+    def touching(self, *refs: Optional[str]) -> list[Event]:
+        """Bank transfers sent or received by any of refs (each event once)."""
+        seen: dict[str, Event] = {}
+        for r in refs:
+            if r:
+                for e in self.out_by.get(r, ()):
+                    seen[e.event_id] = e
+                for e in self.in_by.get(r, ()):
+                    seen[e.event_id] = e
+        return list(seen.values())
 
 
 class EngineState(BaseModel):
@@ -37,11 +75,23 @@ class EngineState(BaseModel):
     case_content_hash: dict[str, str] = Field(default_factory=dict)
     counters: dict[str, int] = Field(default_factory=dict)
     ingest_seq: int = 0
+    _ix: Optional[EventIndex] = PrivateAttr(default=None)
 
     def next_id(self, prefix: str) -> str:
         n = self.counters.get(prefix, 0) + 1
         self.counters[prefix] = n
         return f"{prefix}-{n:04d}"
+
+    def ix(self) -> EventIndex:
+        """Index over events; rebuilt if events changed without going through add_event."""
+        if self._ix is None or self._ix.n != len(self.events):
+            self._ix = EventIndex(self.events)
+        return self._ix
+
+    def add_event(self, e: Event) -> None:
+        ix = self.ix()
+        self.events[e.event_id] = e
+        ix.add(e)
 
 
 class BankAccount(BaseModel):

@@ -1,18 +1,23 @@
 import { Fragment, useState } from 'react'
 import { api, type Json } from '../api'
-import { SHORT_ACTION, hm, recStatus, shortId, thb, time, usdt } from '../format'
+import { SHORT_ACTION, hm, instName, recStatus, shortId, thb, time, usdt } from '../format'
 import { Icon } from '../icons'
 import { useView } from '../useRun'
 import GraphView, { type GraphSel } from './GraphView'
 
 type Props = { run: Json; version: number; present: boolean; compact?: boolean }
-const INST: Record<string, [string, string]> = { bank_a: ['Bank A', 'bank'], bank_b: ['Bank B', 'bank'], exchange: ['Exchange', 'swap'] }
+const INST = (org: string): [string, string] => [instName(org), org === 'exchange' ? 'swap' : 'bank']
+const LIST_LIMIT = 6   // side-card rows before "+N more" (network cases list every account)
 
 export default function EnginePage({ run, version, present, compact }: Props) {
-  const { data: graph } = useView<Json>(`/v1/runs/${run.run_id}/graph`, version)
-  const { data: view } = useView<Json>(`/v1/runs/${run.run_id}/views/simulator`, version)
+  const [caseId, setCaseId] = useState<string>('')
+  const [focus, setFocus] = useState<string>('')
+  const q = (ps: Record<string, string>) => { const s = new URLSearchParams(Object.entries(ps).filter(([, v]) => v)).toString(); return s ? `?${s}` : '' }
+  const { data: graph } = useView<Json>(`/v1/runs/${run.run_id}/graph${q({ case_id: caseId, focus })}`, version)
+  const { data: view } = useView<Json>(`/v1/runs/${run.run_id}/views/simulator${q({ case_id: caseId })}`, version)
   const [sel, setSel] = useState<GraphSel>(null)
   const assessment = view?.cases?.[0]?.assessment
+  const openCases: Json[] = (view?.cases ?? []).filter((c: Json) => c.status === 'open')
   const model = view?.model_info
   const down = !!view?.faults?.model_unavailable
 
@@ -42,11 +47,18 @@ export default function EnginePage({ run, version, present, compact }: Props) {
       )}
       <div className="engine-grid">
         <div className="stack" style={{ gap: 16 }}>
+          {run.large && view?.network && <NetworkCard net={view.network} cases={openCases} caseId={view.cases?.[0]?.case_id}
+            onCase={(id) => { setCaseId(id); setFocus(''); setSel(null) }} />}
           <div className="card">
             <div className="card-head">
               <span className="caps">Money-flow evidence graph</span>
-              <span className="sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="info" size={15} />Trace crosses only verified deposit links</span>
+              {graph?.focus_options?.length > 1
+                ? <select value={graph.focus} onChange={(e) => { setFocus(e.target.value); setSel(null) }} aria-label="Reported account shown in the graph">
+                  {graph.focus_options.map((o: Json) => <option key={o.id} value={o.id}>From {o.label} · {o.reports} report{o.reports === 1 ? '' : 's'}</option>)}
+                </select>
+                : <span className="sub" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><Icon name="info" size={15} />Trace crosses only verified deposit links</span>}
             </div>
+            {graph?.focus_options?.length > 1 && <div className="small muted" style={{ marginBottom: 8 }}>One network case, {graph.focus_options.length} reported accounts. The graph follows the money from one of them; repeated transfers between two accounts are folded into one edge.</div>}
             {graph ? <GraphView graph={graph} merchantId={run.merchant_account_id} sel={active} onSelect={setSel} /> : <div className="empty">Loading graph…</div>}
             <div className="legend">
               <span><i />Verified (confirmed record)</span>
@@ -85,17 +97,14 @@ export default function EnginePage({ run, version, present, compact }: Props) {
             <h3><Icon name="leaf" size={20} />Benign context</h3>
             {!assessment ? <div className="empty">Appears once a case is open.</div>
               : assessment.context_benign.length === 0 ? <div className="empty">None found.</div>
-                : <ul className="check-list">{benignSummary(assessment.context_benign).map((t) => <li key={t}><Icon name="checkCircle" size={20} />{t}</li>)}</ul>}
+                : <CappedList items={benignSummary(assessment.context_benign)} icon="checkCircle" />}
           </div>
 
           <div className="card side-card">
             <h3><Icon name="file" size={20} />Missing data &amp; uncertainty</h3>
             {!assessment ? <div className="empty">Appears once a case is open.</div> : (
               assessment.missing_inputs.length || assessment.uncertainty.length
-                ? <ul className="check-list warn">
-                  {assessment.missing_inputs.map((m: string) => <li key={m}><Icon name="alert" size={20} />{missingLabel(m)}</li>)}
-                  {assessment.uncertainty.map((u: string, i: number) => <li key={i}><Icon name="alert" size={20} />{u}</li>)}
-                </ul>
+                ? <CappedList warn icon="alert" items={[...assessment.missing_inputs.map(missingLabel), ...assessment.uncertainty]} />
                 : <ul className="check-list"><li><Icon name="checkCircle" size={20} />None recorded for this snapshot</li></ul>
             )}
             <div className="small muted" style={{ marginTop: 12 }}>Linked evidence is not a finding of wrongdoing.</div>
@@ -103,6 +112,40 @@ export default function EnginePage({ run, version, present, compact }: Props) {
         </div>
       </div>
       {!compact && <div className="foot-note">Prototype design · Synthetic data</div>}
+    </div>
+  )
+}
+
+function CappedList({ items, icon, warn }: { items: string[]; icon: string; warn?: boolean }) {
+  const [all, setAll] = useState(false)
+  const rows = all ? items : items.slice(0, LIST_LIMIT)
+  return (
+    <>
+      <ul className={`check-list ${warn ? 'warn' : ''}`}>{rows.map((t, i) => <li key={i}><Icon name={icon} size={20} />{t}</li>)}</ul>
+      {items.length > LIST_LIMIT && <button className="ghost small" onClick={() => setAll(!all)}>{all ? 'Show fewer' : `+${items.length - LIST_LIMIT} more`}</button>}
+    </>
+  )
+}
+
+// Large scenarios: how big the case is and how much officer work it creates.
+function NetworkCard({ net, cases, caseId, onCase }: { net: Json; cases: Json[]; caseId?: string; onCase: (id: string) => void }) {
+  const stats: [string, string | number][] = [
+    ['Reports', net.reports], ['Reported accounts', net.reported_accounts], ['Bank accounts traced', net.bank_accounts],
+    ['Banks', net.institutions.length], ['Exchange customers', net.exchange_customers], ['Withdrawals', net.withdrawals],
+    ['Awaiting officer', net.awaiting_officer], ['Held', thb(net.held_minor)],
+  ]
+  return (
+    <div className="card">
+      <div className="card-head">
+        <span className="caps">Network case</span>
+        {cases.length > 1 && (
+          <select value={caseId} onChange={(e) => onCase(e.target.value)} aria-label="Case">
+            {cases.map((c) => <option key={c.case_id} value={c.case_id}>{c.case_id} · {(c.origin_subjects?.length || 1)} reported account{(c.origin_subjects?.length || 1) > 1 ? 's' : ''}</option>)}
+          </select>
+        )}
+      </div>
+      <div className="stat-row">{stats.map(([l, v]) => <div key={l} className="stat"><span className="lbl">{l}</span><b className={l === 'Awaiting officer' && Number(v) ? 'amber' : ''}>{v}</b></div>)}</div>
+      <div className="small muted" style={{ marginTop: 10 }}>Reports that reach the same accounts join one case, so each account gets one recommendation, not one per report. {net.open_cases} open case{net.open_cases === 1 ? '' : 's'} in this run.</div>
     </div>
   )
 }
@@ -230,7 +273,7 @@ function RecLog({ view }: { view: Json }) {
           <tbody>
             {rows.map((r) => {
               const d = (view.decisions ?? []).filter((x: Json) => x.recommendation_id === r.recommendation_id).pop()
-              const [inst, icon] = INST[r.institution] ?? [r.institution, 'bank']
+              const [inst, icon] = INST(r.institution)
               const scope = r.target_scope.amount_minor !== undefined
                 ? r.target_scope.withdrawal_id ? `${shortId(r.target_scope.withdrawal_id)} · ${usdt(r.target_scope.amount_minor).replace('.00 ', ' ')}` : `${thb(r.target_scope.amount_minor)} hold`
                 : r.target_scope.restriction_id ? `${shortId(r.target_scope.account_id)} · ${r.target_scope.restriction_id}` : shortId(r.subject_id)

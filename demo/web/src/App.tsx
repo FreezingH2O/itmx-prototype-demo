@@ -7,34 +7,60 @@ import Institutions from './pages/Institutions'
 import EnginePage from './pages/Engine'
 import Merchant from './pages/Merchant'
 import Results from './pages/Results'
+import Landing from './pages/Landing'
 
-type PageId = 'institutions' | 'engine' | 'merchant' | 'results' | 'overview'
+type PageId = 'home' | 'institutions' | 'engine' | 'merchant' | 'results' | 'overview'
 const PAGES: { id: PageId; label: string; key: string; icon: string }[] = [
   { id: 'institutions', label: 'Institutions', key: '1', icon: 'bank' },
   { id: 'engine', label: 'Our Engine', key: '2', icon: 'graph' },
   { id: 'merchant', label: 'Merchant', key: '3', icon: 'store' },
   { id: 'results', label: 'Experiment Results', key: '4', icon: 'chart' },
 ]
-const DEMO_ORDER: PageId[] = ['merchant', 'institutions', 'engine', 'institutions', 'merchant', 'results']
+const LABELS: Record<string, string> = { overview: 'Overview', ...Object.fromEntries(PAGES.map((p) => [p.id, p.label])) }
 
 function readPage(): PageId {
   const h = window.location.hash.replace('#', '') as PageId
-  return ['institutions', 'engine', 'merchant', 'results', 'overview'].includes(h) ? h : 'institutions'
+  return ['home', 'institutions', 'engine', 'merchant', 'results', 'overview'].includes(h) ? h : 'home'
 }
+
+// Sidebar: hidden on Home. On wide screens it is expanded or collapsed to an icon rail, toggled from the
+// button in its own header. On narrow screens it is an overlay drawer opened from the top bar menu button.
+const narrow = () => window.matchMedia('(max-width: 860px)').matches
 
 export default function App() {
   const { run, version, error, start, clock, setError } = useRun()
   const [page, setPage] = useState<PageId>(readPage)
-  const [present, setPresent] = useState(false)
-  const [demoIdx, setDemoIdx] = useState(0)
   const [scenarios, setScenarios] = useState<Json[]>([])
   const [scenario, setScenario] = useState('merchant_300')
   const [mode, setMode] = useState<'live' | 'recorded'>('live')
+  const [sideOpen, setSideOpen] = useState(() => !narrow())
+  const home = page === 'home'
+  const toggleSide = () => setSideOpen((o) => !o)
+  const goto = (p: PageId) => { setPage(p); if (narrow()) setSideOpen(false) }
+  // Picking a scenario or mode starts that run at once; the controls always show the run being viewed.
+  const [starting, setStarting] = useState(false)
+  const launch = async (s: string, m: 'live' | 'recorded') => {
+    const info = scenarios.find((x) => x.id === s)
+    const mm = m === 'recorded' && !info?.recording_available ? 'live' : m
+    setScenario(s); setMode(mm); setStarting(true)
+    try { await start(s, mm, info?.default_speed ?? 30) } finally { setStarting(false) }
+  }
+  // Entering the demo from Home always starts with the sidebar expanded on wide screens.
+  const [wasHome, setWasHome] = useState(home)
+  if (wasHome !== home) { setWasHome(home); if (!home) setSideOpen(!narrow()) }
 
   useEffect(() => { api.get('/v1/scenarios').then(setScenarios).catch(() => {}) }, [])
   useEffect(() => { window.location.hash = page }, [page])
-  useEffect(() => { document.body.classList.toggle('present', present) }, [present])
-  useEffect(() => { if (run) { setScenario(run.scenario); setMode(run.mode) } }, [run?.run_id]) // eslint-disable-line
+  useEffect(() => {
+    const onHash = () => setPage(readPage())
+    const mq = window.matchMedia('(max-width: 860px)')
+    const onWidth = () => setSideOpen(!narrow()) // drawer closes on narrow screens, expands on wide ones
+    window.addEventListener('hashchange', onHash)
+    mq.addEventListener('change', onWidth)
+    return () => { window.removeEventListener('hashchange', onHash); mq.removeEventListener('change', onWidth) }
+  }, [])
+  // Keep the controls on the run actually shown (also when another tab or a failed start changes it).
+  useEffect(() => { if (run && !starting) { setScenario(run.scenario); setMode(run.mode) } }, [run?.run_id, starting]) // eslint-disable-line
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -44,75 +70,106 @@ export default function App() {
       const k = e.key.toLowerCase()
       if (e.code === 'Space') { e.preventDefault(); clock(run?.clock.playing ? 'pause' : 'play') }
       else if (e.key === 'ArrowRight') clock('step')
-      else if (k === 'p') setPresent((p) => !p)
-      else if (e.key === 'Escape') setPresent(false)
-      else if (k === 'n' && present) { const i = (demoIdx + 1) % DEMO_ORDER.length; setDemoIdx(i); setPage(DEMO_ORDER[i]) }
+      else if ((k === 'b' || e.key === '[') && page !== 'home') toggleSide()
+      else if (e.key === 'Escape' && narrow()) setSideOpen(false)
       else { const p = PAGES.find((x) => x.key === e.key); if (p) setPage(p.id) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [clock, run, present, demoIdx])
+  }, [clock, run, page]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const recorded = run?.mode === 'recorded'
   const modelError = run?.model?.status?.kind === 'error'
   const playing = !!run?.clock.playing
-  const props = { run, version, present }
+  const props = { run, version, present: false }
+  const rail = !sideOpen // on wide screens a closed sidebar is an icon rail
+  const tip = (label: string) => (rail ? label : undefined)
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <Logo size={92} />
-          <div className="brand-name">ทางเชื่อม</div>
-          <div className="brand-sub">Bank × Crypto Risk Graph</div>
+    <div className={`shell ${home ? 'side-off' : ''} ${sideOpen ? '' : 'side-collapsed'}`}>
+      <div className="side-scrim" onClick={toggleSide} aria-hidden="true" />
+      <aside className="sidebar" aria-hidden={home} inert={home}>
+        <div className="side-head">
+          <button className="brand" onClick={() => goto('home')} title="Back to home">
+            <span className="brand-mark"><Logo size={30} /></span>
+            <span className="brand-text"><b>ทางเชื่อม</b><small>Bank × Crypto Risk Graph</small></span>
+          </button>
+          <button className="side-collapse" onClick={toggleSide} aria-expanded={sideOpen}
+            aria-label={sideOpen ? 'Collapse sidebar' : 'Expand sidebar'} title={`${sideOpen ? 'Collapse' : 'Expand'} sidebar (B)`}>
+            <Icon name="sidebar" size={18} />
+          </button>
         </div>
+        <div className="side-label">Views</div>
         <nav className="side-nav">
           {PAGES.map((p) => (
-            <button key={p.id} className={page === p.id ? 'active' : ''} onClick={() => setPage(p.id)}>
-              <span className="n">0{p.key}</span><Icon name={p.icon} size={20} />{p.label}
+            <button key={p.id} className={page === p.id ? 'active' : ''} onClick={() => goto(p.id)} title={tip(p.label)} aria-label={p.label}>
+              <Icon name={p.icon} size={19} /><span className="lbl">{p.label}</span><kbd className="lbl">{p.key}</kbd>
             </button>
           ))}
+          <button className={page === 'overview' ? 'active' : ''} onClick={() => goto('overview')} title={tip('Overview')} aria-label="Overview">
+            <Icon name="layout" size={19} /><span className="lbl">Overview</span>
+          </button>
         </nav>
         <div className="side-spacer" />
         <div className="side-group">
-          <span className="side-label">Scenario</span>
-          <select value={scenario} onChange={(e) => setScenario(e.target.value)} aria-label="Scenario">
+          <div className="side-label">Simulation</div>
+          <select value={scenario} onChange={(e) => launch(e.target.value, mode)} aria-label="Scenario" disabled={starting}>
             {scenarios.map((s) => <option key={s.id} value={s.id}>{s.id}</option>)}
           </select>
-          <select value={mode} onChange={(e) => setMode(e.target.value as 'live' | 'recorded')} aria-label="Mode">
+          <select value={mode} onChange={(e) => launch(scenario, e.target.value as 'live' | 'recorded')} aria-label="Mode" disabled={starting}>
             <option value="live">Live inference</option>
             <option value="recorded" disabled={!scenarios.find((s) => s.id === scenario)?.recording_available}>Recorded replay</option>
           </select>
-          <button className="side-btn" onClick={() => start(scenario, mode)}><Icon name="refresh" />New run</button>
-        </div>
-        <div className="side-group">
-          <button className={`side-btn ${page === 'overview' ? 'on' : ''}`} onClick={() => setPage('overview')}><Icon name="home" />Overview</button>
-          <button className={`side-btn ${present ? 'on' : ''}`} onClick={() => setPresent((p) => !p)}
-            title="Keys: Space play/pause, → step, 1-4 pages, n next demo page">
-            <Icon name="present" />{present ? 'Exit presentation' : 'Presentation'}
+          <button className="side-btn" title={tip(`Restart ${scenario}`)} aria-label="Restart run" disabled={starting}
+            onClick={() => launch(scenario, mode)}>
+            <Icon name="refresh" size={18} /><span className="lbl">{starting ? 'Starting…' : 'Restart run'}</span>
           </button>
         </div>
-        <div className="side-foot">SYNTHETIC DATA</div>
+        <div className="side-foot"><i /><span className="lbl">Synthetic data only</span></div>
       </aside>
 
       <div className="main">
+        {home ? (
+          <Landing scenarios={scenarios} scenario={scenario} setScenario={setScenario} mode={mode} setMode={setMode}
+            onOpen={goto}
+            onStart={async (s, m, p) => { await launch(s, m); goto(p) }} />
+        ) : <>
         <header className="topbar">
-          <span className="case-id">{run?.case_ids?.[0] ?? 'NO CASE YET'}</span>
-          <span className="vsep" />
-          <span className="tpill syn">Synthetic simulation</span>
-          {recorded
-            ? <span className="tpill rec">RECORDED · {run?.recording}</span>
-            : <span className={`tpill ${modelError ? 'err' : 'live'}`}>LIVE · {run?.model?.model_id ?? 'model'}</span>}
-          <span className="vsep" />
-          <span className="sim-time" title="Simulated time, not real time">Simulation time <b>{run ? time(run.clock.now) : '--:--:--'}</b></span>
-          <span className="top-spacer" />
-          <div className="controls">
-            <button className={playing ? 'on' : ''} onClick={() => clock('play')} disabled={!run || playing}><Icon name="play" size={15} />Play</button>
-            <button onClick={() => clock('pause')} disabled={!run || !playing}><Icon name="pause" size={15} />Pause</button>
-            <button onClick={() => clock('step')} disabled={!run}><Icon name="step" size={15} />Step</button>
-            <button onClick={() => clock('reset')} disabled={!run}><Icon name="reset" size={15} />Reset</button>
-            <select value={run?.clock.speed ?? 30} onChange={(e) => clock('speed', { speed: Number(e.target.value) })} aria-label="Replay speed">
-              {[10, 30, 60, 120].map((s) => <option key={s} value={s}>{s}×</option>)}
+          <div className="tb-left">
+            <button className="tb-icon tb-menu" onClick={toggleSide} aria-label="Open menu" aria-expanded={sideOpen}>
+              <Icon name="menu" size={18} />
+            </button>
+            <button className="tb-icon" onClick={() => goto('home')} aria-label="Home" title="Home">
+              <Icon name="home" size={18} />
+            </button>
+            <nav className="tb-crumbs" aria-label="Breadcrumb">
+              <span>Demo</span><Icon name="chevronRight" size={14} /><b>{LABELS[page]}</b>
+            </nav>
+            <span className="tb-case" title={run?.case_ids?.length ? 'Open case' : 'A case opens when the first report reaches the engine'}>
+              <span className="scn">{starting ? 'Starting…' : run?.scenario ?? '…'}</span>
+              {run?.case_ids?.length
+                ? <>{run.case_ids[0]}{run.case_ids.length > 1 && <em>+{run.case_ids.length - 1}</em>}</>
+                : <em>Awaiting report</em>}
+            </span>
+          </div>
+          <div className="tb-status">
+            <span className="chip syn"><i />Synthetic</span>
+            {recorded
+              ? <span className="chip rec"><i />Recorded · {run?.recording}</span>
+              : <span className={`chip ${modelError ? 'err' : 'live'}`}><i />{modelError ? 'Model error' : 'Live'} · {run?.model?.model_id ?? 'model'}</span>}
+          </div>
+          <div className="player" role="group" aria-label="Simulation controls">
+            <div className="player-time" title="Simulated time, not real time">
+              <span>Sim time</span><b>{run ? time(run.clock.now) : '--:--:--'}</b>
+            </div>
+            <button className={`player-main ${playing ? 'on' : ''}`} onClick={() => clock(playing ? 'pause' : 'play')} disabled={!run}
+              aria-label={playing ? 'Pause' : 'Play'} title={`${playing ? 'Pause' : 'Play'} (Space)`}>
+              <Icon name={playing ? 'pause' : 'play'} size={15} />
+            </button>
+            <button className="player-btn" onClick={() => clock('step')} disabled={!run} aria-label="Step" title="Step (→)"><Icon name="step" size={15} /></button>
+            <button className="player-btn" onClick={() => clock('reset')} disabled={!run} aria-label="Reset" title="Reset"><Icon name="reset" size={15} /></button>
+            <select className="player-speed" value={run?.clock.speed ?? 30} onChange={(e) => clock('speed', { speed: Number(e.target.value) })} aria-label="Replay speed" title="Replay speed">
+              {[10, 30, 60, 120, ...(run?.large ? [600] : [])].map((s) => <option key={s} value={s}>{s}×</option>)}
             </select>
           </div>
         </header>
@@ -129,6 +186,7 @@ export default function App() {
           : page === 'engine' ? <EnginePage {...props} />
             : page === 'merchant' ? <Merchant {...props} />
               : <Results {...props} />}
+        </>}
       </div>
     </div>
   )

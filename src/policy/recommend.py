@@ -37,13 +37,12 @@ def _quantile(values: list[int], q: float) -> Optional[int]:
 
 
 def receiving_context(state: EngineState, account: str, before, cfg: dict[str, Any]) -> dict[str, Any]:
-    hist = [e for e in state.events.values()
-            if e.event_type == "bank_transfer" and e.to_ref == account
-            and e.available_at < before and before - timedelta(days=30) <= e.occurred_at < before]
+    ix = state.ix()
+    hist = [e for e in ix.in_by.get(account, ())
+            if e.available_at < before and before - timedelta(days=30) <= e.occurred_at < before]
     amounts = [e.amount_minor or 0 for e in hist]
     payers = {e.from_ref for e in hist}
-    seen = [e.occurred_at for e in state.events.values()
-            if e.event_type == "bank_transfer" and account in (e.from_ref, e.to_ref) and e.available_at < before]
+    seen = [e.occurred_at for e in ix.touching(account) if e.available_at < before]
     return {
         "count_30d": len(hist), "unique_payers_30d": len(payers),
         "p10_minor": _quantile(amounts, 0.1), "typical_high_minor": _quantile(amounts, cfg["typical_quantile"]),
@@ -73,21 +72,19 @@ def build(state: EngineState, case: Case, tr: dict[str, Any], now, policy: dict[
     uncertainty: list[str] = []
     recs: list[dict[str, Any]] = []
     thr = policy.get("score_priority_threshold")
-    sig = tr["signal"]
-    origin = tr["origin"]
-    origin_inst = origin.split(":")[1]
-
-    evidence.append(EvidenceItem(
-        kind="external_signal",
-        text=f"{sig.attributes.get('category', 'signal')} on {state.entities[origin].display} "
-             f"from {sig.attributes.get('source', 'unknown source')} (assertion, not adjudication)",
-        refs=[sig.event_id], known_at=sig.available_at))
-    recs.append({
-        "institution": origin_inst, "subject_id": origin, "action_type": "EXISTING_CONTROLS_ONLY",
-        "target_scope": {"account_id": origin}, "priority": None,
-        "rationale": ["Reported account is handled under the institution's existing process.",
-                      "Evidence pack attached for the downstream flow."],
-        "evidence_refs": [sig.event_id]})
+    for sig in tr["signals"]:
+        evidence.append(EvidenceItem(
+            kind="external_signal",
+            text=f"{sig.attributes.get('category', 'signal')} on {state.entities[sig.to_ref].display} "
+                 f"from {sig.attributes.get('source', 'unknown source')} (assertion, not adjudication)",
+            refs=[sig.event_id], known_at=sig.available_at))
+    for origin in tr["origins"]:
+        recs.append({
+            "institution": origin.split(":")[1], "subject_id": origin, "action_type": "EXISTING_CONTROLS_ONLY",
+            "target_scope": {"account_id": origin}, "priority": None,
+            "rationale": ["Reported account is handled under the institution's existing process.",
+                          "Evidence pack attached for the downstream flow."],
+            "evidence_refs": [s.event_id for s in tr["signals"] if s.to_ref == origin]})
 
     # ---- downstream bank accounts
     for acct, node in tr["accounts"].items():
@@ -199,8 +196,9 @@ def build(state: EngineState, case: Case, tr: dict[str, Any], now, policy: dict[
                 uncertainty.append(f"{wid}: past the simulated control deadline; state not yet confirmed.")
 
     # ---- restrictions with submitted evidence -> release review or more information
+    family = case.family()
     for d in state.decisions.values():
-        if d.case_id != case.case_id or d.action != "restrict_amount" or d.outcome != "acknowledged":
+        if d.case_id not in family or d.action != "restrict_amount" or d.outcome != "acknowledged":
             continue
         rid = d.restriction_id
         reviews = [x for x in state.decisions.values()

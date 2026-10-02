@@ -37,7 +37,7 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
 
   // --- columns
   const depth: Record<string, number> = {}
-  const bankNodes = visible.filter((n: Json) => n.lane === 'bank_a' || n.lane === 'bank_b')
+  const bankNodes = visible.filter((n: Json) => n.lane.startsWith('bank'))
   for (const n of bankNodes) depth[n.id] = 0
   for (let i = 0; i < bankNodes.length; i++) for (const e of bankEdges) depth[e.target] = Math.max(depth[e.target] ?? 0, (depth[e.source] ?? 0) + 1)
   const maxBank = Math.max(0, ...Object.values(depth))
@@ -123,7 +123,7 @@ export default function GraphView({ graph, merchantId, sel, onSelect }: { graph:
         return (
           <g key={e.id} className="node" onClick={() => onSelect({ kind: 'edge', id: e.id })}>
             <Edge a={a} b={b} color={edgeColor(e)} width={isSel('edge', e.id) ? 4 : 2} />
-            <EdgeLabel a={a} b={b} text={thb(e.amount_minor)} />
+            <EdgeLabel a={a} b={b} text={e.count > 1 ? `${e.count}× ${thb(e.amount_minor)}` : thb(e.amount_minor)} />
           </g>
         )
       })}

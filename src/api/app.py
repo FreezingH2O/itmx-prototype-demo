@@ -31,7 +31,7 @@ from src.contracts import (
     RunCreate,
 )
 from src.engine import core
-from src.engine.graph import build_graph
+from src.engine.graph import build_graph, build_network_graph
 from src.policy import evidence_check
 from src.sim import scenarios
 from src.sim.institutions import SimRejected, apply_decision, receive_evidence
@@ -87,7 +87,10 @@ def run_summary(run) -> dict[str, Any]:
             "epoch": run.epoch, "version": run.version,
             "clock": {"start": clock.start, "now": clock.now, "end": clock.end, "playing": clock.playing,
                       "speed": clock.speed},
-            "case_ids": list(run.engine.cases), "merchant_account_id": run.sim.merchant_account_id,
+            "case_ids": [c.case_id for c in sorted((c for c in run.engine.cases.values() if c.status == "open"),
+                                                   key=lambda c: -len(c.origins()))],
+            "institutions": projections.institutions(run), "large": run.scenario in scenarios.LARGE,
+            "merchant_account_id": run.sim.merchant_account_id,
             "model": run.model_info, "faults": run.faults, "notices": run.sim.notices[-5:],
             "pending_deliveries": sum(1 for d in run.sim.deliveries if not d.delivered)}
 
@@ -101,7 +104,8 @@ def health():
 @app.get("/v1/scenarios")
 def list_scenarios():
     recs = ROOT / runtime.engine_cfg["recordings_dir"]
-    return [{"id": k, "description": v, "recording_available": (recs / f"{k}_demo.json").exists()}
+    return [{"id": k, "description": v, "recording_available": (recs / f"{k}_demo.json").exists(),
+             "large": k in scenarios.LARGE, "default_speed": 600 if k in scenarios.LARGE else 30}
             for k, v in scenarios.SCENARIOS.items()]
 
 
@@ -139,8 +143,10 @@ async def create_run(body: RunCreate):
     return run_summary(run)
 
 
+# Endpoints that read or change run state are async so they run on the event loop, between clock
+# steps; a sync endpoint would run in a worker thread while the clock mutates the same dicts.
 @app.get("/v1/runs/{rid}")
-def get_run(rid: str):
+async def get_run(rid: str):
     return run_summary(_run(rid))
 
 
@@ -206,7 +212,7 @@ class FaultsIn(BaseModel):
 
 
 @app.post("/v1/runs/{rid}/faults")
-def set_faults(rid: str, body: FaultsIn):
+async def set_faults(rid: str, body: FaultsIn):
     run = _run(rid)
     _writable(run)
     run.faults["model_unavailable"] = body.model_unavailable
@@ -259,7 +265,7 @@ async def post_assessment(rid: str, body: AssessmentRequest, x_sim_client: str =
     _writable(run)
     t0 = time.perf_counter()
     async with runtime.lock(rid):
-        inst = x_sim_client if x_sim_client in projections.INSTITUTIONS else None
+        inst = x_sim_client if projections.is_institution(x_sim_client) else None
         try:
             a = core.assess_subject(run.engine, body.subject_id, run.sim.clock.now, runtime.ctx[rid], inst)
         except core.EngineUnavailable as exc:
@@ -280,9 +286,13 @@ async def post_assessment(rid: str, body: AssessmentRequest, x_sim_client: str =
 
 
 @app.get("/v1/runs/{rid}/graph")
-def graph(rid: str, as_of: Optional[datetime] = None):
+async def graph(rid: str, as_of: Optional[datetime] = None, case_id: Optional[str] = None, focus: Optional[str] = None):
     run = _run(rid)
-    return _jsonable(build_graph(run.engine, as_of or run.sim.clock.now, run.sim.clock.start))
+    now = as_of or run.sim.clock.now
+    if run.scenario in scenarios.LARGE:
+        return _jsonable(build_network_graph(run.engine, now, run.sim.clock.start, runtime.policy["trace"],
+                                             case_id=case_id, focus=focus))
+    return _jsonable(build_graph(run.engine, now, run.sim.clock.start, case_id=case_id))
 
 
 def _role(x_sim_role: Optional[str], role: Optional[str]) -> str:
@@ -293,38 +303,39 @@ def _role(x_sim_role: Optional[str], role: Optional[str]) -> str:
 
 
 @app.get("/v1/runs/{rid}/views/{role}")
-def view(rid: str, role: str):
+async def view(rid: str, role: str, case_id: Optional[str] = None):
     run = _run(rid)
-    if role in projections.INSTITUTIONS:
-        return _jsonable(projections.institution_view(run, role))
+    if projections.is_institution(role):
+        return _jsonable(projections.institution_view(run, role, large=run.scenario in scenarios.LARGE))
     if role.startswith("merchant:"):
         acct = role.split(":", 1)[1]
         if acct not in run.sim.accounts or run.sim.accounts[acct].holder_kind != "merchant":
             raise HTTPException(403, "unknown merchant account")
         return _jsonable(projections.merchant_view(run, acct))
     if role == "simulator":
-        return _jsonable(projections.engine_view(run))
+        return _jsonable(projections.engine_view(run, case_id, large=run.scenario in scenarios.LARGE))
     raise HTTPException(403, f"unknown role {role}")
 
 
 @app.get("/v1/runs/{rid}/cases/{case_id}")
-def get_case(rid: str, case_id: str, role: Optional[str] = None, x_sim_role: Optional[str] = Header(default=None)):
+async def get_case(rid: str, case_id: str, role: Optional[str] = None, x_sim_role: Optional[str] = Header(default=None)):
     run = _run(rid)
     r = _role(x_sim_role, role)
-    case = run.engine.cases.get(case_id)
-    if case is None:
+    if case_id not in run.engine.cases:
         raise HTTPException(404, "case not found")
+    case = core.live_case(run.engine, case_id)   # a merged case answers as the case that absorbed it
+    fam = case.family()
     if r == "simulator":
         a = run.engine.assessments.get(case.latest_assessment_id) if case.latest_assessment_id else None
         return _jsonable({"case": case.model_dump(mode="json"), "assessment": a.model_dump(mode="json") if a else None})
-    if r in projections.INSTITUTIONS:
+    if projections.is_institution(r):
         v = projections.institution_view(run, r)
-        return _jsonable({"case_id": case_id, "recommendations": [x for x in v["recommendations"] if x["case_id"] == case_id],
-                          "decisions": [d for d in v["decisions"] if d["case_id"] == case_id]})
+        return _jsonable({"case_id": case.case_id, "recommendations": [x for x in v["recommendations"] if x["case_id"] in fam],
+                          "decisions": [d for d in v["decisions"] if d["case_id"] in fam]})
     if r.startswith("merchant:"):
         acct = r.split(":", 1)[1]
         mv = projections.merchant_view(run, acct)
-        rs = [x for x in mv["restrictions"] if x["case_id"] == case_id]
+        rs = [x for x in mv["restrictions"] if x["case_id"] in fam]
         if not rs:
             raise HTTPException(403, "this case has no restriction on your account")
         return _jsonable({"case_id": case_id, "restrictions": rs, "ledger": mv["ledger"]})
@@ -332,7 +343,7 @@ def get_case(rid: str, case_id: str, role: Optional[str] = None, x_sim_role: Opt
 
 
 @app.get("/v1/runs/{rid}/cases/{case_id}/timeline")
-def get_timeline(rid: str, case_id: str):
+async def get_timeline(rid: str, case_id: str):
     run = _run(rid)
     if case_id not in run.engine.cases:
         raise HTTPException(404, "case not found")
@@ -340,7 +351,7 @@ def get_timeline(rid: str, case_id: str):
 
 
 @app.get("/v1/runs/{rid}/audit")
-def get_audit(rid: str, after: int = 0, limit: int = 200):
+async def get_audit(rid: str, after: int = 0, limit: int = 200):
     run = _run(rid)
     if run.mode == "recorded":
         return {"note": "recorded replay: use the timeline; the audit log belongs to the recording run", "items": []}
@@ -388,7 +399,7 @@ async def post_decision(rid: str, body: DecisionIn, x_sim_role: Optional[str] = 
         runtime.ctx[rid].audit("decision", did, dec.model_dump(mode="json"))
         if outcome == "acknowledged" and body.action != "no_action":
             rec.status = "acknowledged"
-        case = eng.cases[rec.case_id]
+        case = core.live_case(eng, rec.case_id)
         core.assess_case(eng, case, now, runtime.ctx[rid])
         run.sim.deliveries.extend(follow)
         resp = {"decision": dec.model_dump(mode="json")}
@@ -420,7 +431,8 @@ async def post_evidence(rid: str, case_id: str, body: EvidenceSubmissionIn,
                 raise HTTPException(409, "idempotency key reused with a different payload")
             return JSONResponse(idem["body"], status_code=idem["code"])
         r = sim.restrictions.get(body.restriction_id)
-        if r is None or r.account_id != acct or r.case_id != case_id:
+        if (r is None or r.account_id != acct or case_id not in eng.cases
+                or core.live_case(eng, r.case_id).case_id != core.live_case(eng, case_id).case_id):
             raise HTTPException(403, "restriction not found on your account for this case")
         if r.status != "active":
             raise HTTPException(409, f"restriction already {r.status}")
@@ -439,7 +451,7 @@ async def post_evidence(rid: str, case_id: str, body: EvidenceSubmissionIn,
         eng.evidence_submissions[sub.submission_id] = sub
         receive_evidence(sim, r.restriction_id, sim.clock.now, sub.submission_id)
         runtime.ctx[rid].audit("evidence_submission", sub.submission_id, sub.model_dump(mode="json"))
-        core.assess_case(eng, eng.cases[case_id], sim.clock.now, runtime.ctx[rid])
+        core.assess_case(eng, core.live_case(eng, case_id), sim.clock.now, runtime.ctx[rid])
         resp = {"submission_id": sub.submission_id, "review_state": "review_pending",
                 "note": "Evidence received. A reviewer decides; submission alone does not release funds."}
         eng.idempotency[key] = {"hash": _hash(body.model_dump()), "code": 200, "body": resp}

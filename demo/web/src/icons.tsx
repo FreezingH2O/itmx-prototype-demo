@@ -35,6 +35,11 @@ const PATHS: Record<string, string> = {
   gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 14.5l1.4 1.1-2 3.4-1.7-.6a7.6 7.6 0 0 1-2 1.2L14.8 21h-3.9l-.3-1.6a7.6 7.6 0 0 1-2-1.2l-1.7.6-2-3.4 1.4-1.1a7.4 7.4 0 0 1 0-2.4L4.9 11l2-3.4 1.7.6a7.6 7.6 0 0 1 2-1.2l.3-1.6h3.9l.3 1.6a7.6 7.6 0 0 1 2 1.2l1.7-.6 2 3.4-1.4 1.1a7.4 7.4 0 0 1 0 2.4z',
   send: 'M5 12h14M13 6l6 6-6 6',
   refresh: 'M20 12a8 8 0 1 1-2.4-5.7M20 4v5h-5',
+  sidebar: 'M4 5h16v14H4zM9.5 5v14',
+  menu: 'M4 7h16M4 12h16M4 17h16',
+  layout: 'M4 5h16v14H4zM9.5 5v14M14.5 5v14',
+  arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  arrowDown: 'M12 5v14M6 13l6 6 6-6',
 }
 
 export function Icon({ name, size = 18, className }: P & { name: keyof typeof PATHS | string }) {

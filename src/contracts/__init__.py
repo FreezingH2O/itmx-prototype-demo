@@ -162,10 +162,25 @@ class Case(BaseModel):
     opened_at: datetime
     trigger_event_id: str
     origin_subject: str
+    # A network case can hold several reported accounts; the first pair above is the opener.
+    origin_subjects: list[str] = Field(default_factory=list)
+    trigger_event_ids: list[str] = Field(default_factory=list)
     scope_entities: list[str] = Field(default_factory=list)
     scope_events: list[str] = Field(default_factory=list)
+    relay_entities: list[str] = Field(default_factory=list)   # pass-through accounts, exchange customers
+    merged_case_ids: list[str] = Field(default_factory=list)
+    merged_into: Optional[str] = None
     status: Literal["open", "closed"] = "open"
     latest_assessment_id: Optional[str] = None
+
+    def origins(self) -> list[str]:
+        return self.origin_subjects or [self.origin_subject]
+
+    def triggers(self) -> list[str]:
+        return self.trigger_event_ids or [self.trigger_event_id]
+
+    def family(self) -> set[str]:
+        return {self.case_id, *self.merged_case_ids}
 
 
 class AssessmentRequest(BaseModel):

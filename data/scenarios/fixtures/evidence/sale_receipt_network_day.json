@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "type": "sale_record",
+  "title": "ใบสั่งซื้อข้าวมันไก่ 478 บาท ร้านป้ามะลิ (Network Day, ตัวอย่างสังเคราะห์)",
+  "order_id": "ORD-SYN-20261001-ND-001",
+  "amount_thb": "478.00",
+  "paid_at": "2026-10-01T09:20:13+07:00",
+  "payer_hint": "•7213",
+  "items": [
+    {
+      "name": "ชุดข้าวมันไก่และน้ำ สั่งกลับบ้าน (synthetic)",
+      "qty": 1,
+      "unit_thb": "478.00"
+    }
+  ],
+  "note": "Fictional document for the Network Day demo. Matches the featured merchant's one payment from a mule account."
+}

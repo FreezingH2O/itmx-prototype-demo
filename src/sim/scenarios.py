@@ -5,6 +5,7 @@ merchant_300      : base storyboard (E1-E8). Value conserves:
 missing_reference : both exchange deposits arrive without a bank reference (equal amounts),
                     so links stay unverified (candidate or unresolved) and no restriction is recommended.
 late_broadcast    : the withdrawal is broadcast before the report arrives.
+network_day       : one day of a whole mule network across 5 banks (see network_day.py).
 
 Ground truth roles live in TRUTH and are for evaluators only; the engine never imports it.
 """
@@ -38,7 +39,10 @@ SCENARIOS = {
     "merchant_300": "Merchant receives 300 THB from a reported account; the rest moves to an exchange.",
     "missing_reference": "Same flow, but exchange deposits carry no bank reference (links not verified).",
     "late_broadcast": "Same flow, but the withdrawal is broadcast before the report arrives.",
+    "network_day": "Scale mode: one day of a mule network, 153 victims, 5 banks, OTC sellers, innocent merchants.",
 }
+# Scenarios too large to draw every transfer; the graph shows one case at a time.
+LARGE = {"network_day"}
 
 RATE_THB_PER_USDT = "35.20"
 
@@ -98,6 +102,9 @@ def history() -> list[dict]:
 def build(name: str) -> dict[str, Any]:
     if name not in SCENARIOS:
         raise KeyError(f"unknown scenario {name!r}; options {sorted(SCENARIOS)}")
+    if name == "network_day":
+        from src.sim import network_day
+        return network_day.build()
     with_refs = name != "missing_reference"
     late = name == "late_broadcast"
     g1, f1, n1 = _usdt_for(1600000)

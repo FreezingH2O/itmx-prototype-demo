@@ -1,0 +1,18 @@
+{
+  "schema_version": "0.1",
+  "run_id": null,
+  "status": "completed",
+  "measurement_type": "external_synthetic_benchmark",
+  "dataset": {
+    "id": "IBM AML synthetic transactions (HI-Small, LI-Small)",
+    "version": "v8"
+  },
+  "split": "Temporal 60/20/20; first 24 hours are history warm-up; IBM window 1-10 September 2022",
+  "hardware": "Local workstation: NVIDIA RTX 4070 SUPER GPU and CPU",
+  "limitations": [
+    "Run ID, seeds and confidence intervals were not recorded for these results, so differences between arms are point estimates.",
+    "Test cohort sizes are 20% of rounded publisher totals, not audited eligible row counts.",
+    "Resource figures describe one fit, not the full configuration and seed search; LI time scales with input size.",
+    "Non-inferiority and threshold feasibility were not evaluated."
+  ]
+}

@@ -39,6 +39,7 @@ data/processed/*
 artifacts/runtime/
 artifacts/bundles/*
 !artifacts/bundles/.gitkeep
+!artifacts/bundles/ibm-aml-results/
 *.sqlite
 *.sqlite-journal
 

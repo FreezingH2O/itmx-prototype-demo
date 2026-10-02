@@ -1,0 +1,243 @@
+{
+  "dataset_scope": [
+    {
+      "key": "hi",
+      "file": "HI-Small_Trans.csv",
+      "version_proposed": 8,
+      "publisher_transactions_approx": 5000000,
+      "publisher_accounts_approx": 515000,
+      "publisher_laundering_transactions_approx": 5100,
+      "publisher_laundering_rate_one_per_transactions": 981,
+      "publisher_rate_assumption": 0.0010193679918450561,
+      "assumed_prevalence": 0.001019,
+      "planned_primary_window": {
+        "start": "2022-09-01T00:00:00",
+        "end_exclusive": "2022-09-11T00:00:00",
+        "time_basis": "dataset_naive_unverified"
+      },
+      "planned_split": {
+        "fractions": [
+          0.6,
+          0.2,
+          0.2
+        ],
+        "boundary": "whole_timestamp_groups",
+        "validation_subdivision": [
+          0.5,
+          0.5
+        ],
+        "warmup_hours": 24,
+        "history_rule": "strictly_available_before_target"
+      },
+      "test_rows": 1000000,
+      "test_positives": 1019
+    },
+    {
+      "key": "li",
+      "file": "LI-Small_Trans.csv",
+      "version_proposed": 8,
+      "publisher_transactions_approx": 7000000,
+      "publisher_accounts_approx": 705000,
+      "publisher_laundering_transactions_approx": 4000,
+      "publisher_laundering_rate_one_per_transactions": 1942,
+      "publisher_rate_assumption": 0.0005149330587023687,
+      "assumed_prevalence": 0.000515,
+      "planned_primary_window": {
+        "start": "2022-09-01T00:00:00",
+        "end_exclusive": "2022-09-11T00:00:00",
+        "time_basis": "dataset_naive_unverified"
+      },
+      "planned_split": {
+        "fractions": [
+          0.6,
+          0.2,
+          0.2
+        ],
+        "boundary": "whole_timestamp_groups",
+        "validation_subdivision": [
+          0.5,
+          0.5
+        ],
+        "warmup_hours": 24,
+        "history_rule": "strictly_available_before_target"
+      },
+      "test_rows": 1400000,
+      "test_positives": 721
+    }
+  ],
+  "training_setup": {
+    "seeds": [
+      17,
+      29,
+      43
+    ],
+    "lightgbm_max_configs_per_arm": 3,
+    "gnn_max_configs": 2,
+    "test_retuning": false,
+    "gnn_initial_seed": 17,
+    "gnn_replicate_seeds_if_time": [
+      29,
+      43
+    ],
+    "gnn_initial_profile": {
+      "layers": 2,
+      "hidden": 64,
+      "fanout": [
+        10,
+        5
+      ],
+      "batch_size": 128,
+      "max_epochs": 15,
+      "early_stopping": 3
+    },
+    "lightgbm_initial_configs": [
+      {
+        "num_leaves": 15,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 100
+      },
+      {
+        "num_leaves": 31,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 100
+      },
+      {
+        "num_leaves": 31,
+        "learning_rate": 0.05,
+        "min_data_in_leaf": 500
+      }
+    ],
+    "lightgbm_max_rounds": 500,
+    "lightgbm_early_stopping": 30,
+    "core_first_seed": 17,
+    "repeat_seeds_if_core_finishes": [
+      29,
+      43
+    ],
+    "class_weight_policy": "none in initial fixed search",
+    "seed_repeats_policy": "repeat only if stochastic training is used; no independent-evidence claim for identical deterministic runs"
+  },
+  "metric_setup": {
+    "primary": "recall_at_top_review_fraction",
+    "review_fraction": 0.01,
+    "sensitivity_fractions": [
+      0.001,
+      0.005,
+      0.05
+    ],
+    "ranking_scope": "retrospective_test_ranking_of_asof_scores",
+    "policy_min_validation_recall": 0.8,
+    "policy_max_validation_review_fraction": 0.05,
+    "proposed_recall_noninferiority_margin_pp": 2
+  },
+  "stress_setup": {
+    "target_events_per_world": 100000,
+    "days": 30,
+    "missing_reference_rates": [
+      0,
+      0.1,
+      0.3
+    ],
+    "evidence_delay_seconds": [
+      0,
+      60,
+      300
+    ],
+    "corrupt_reference_rates": [
+      0,
+      0.01
+    ],
+    "simulated_deadlines_seconds": [
+      60,
+      300,
+      900
+    ],
+    "stress_design": "one_factor_at_a_time"
+  },
+  "simulation_scope": {
+    "planned_worlds": 5,
+    "planned_world_seeds": [
+      101,
+      102,
+      103,
+      104,
+      105
+    ],
+    "planned_events_per_world": 100000,
+    "planned_days_per_world": 30,
+    "planned_total_events": 500000,
+    "nominal_train_events": 300000,
+    "nominal_validation_events": 100000,
+    "nominal_test_events": 100000,
+    "allocation": [
+      {
+        "event_type": "Bank transfers",
+        "nominal_total": 175000,
+        "nominal_train": 105000,
+        "nominal_validation": 35000,
+        "nominal_test": 35000
+      },
+      {
+        "event_type": "Exchange deposit credits",
+        "nominal_total": 50000,
+        "nominal_train": 30000,
+        "nominal_validation": 10000,
+        "nominal_test": 10000
+      },
+      {
+        "event_type": "Exchange trades",
+        "nominal_total": 50000,
+        "nominal_train": 30000,
+        "nominal_validation": 10000,
+        "nominal_test": 10000
+      },
+      {
+        "event_type": "Withdrawal requests",
+        "nominal_total": 25000,
+        "nominal_train": 15000,
+        "nominal_validation": 5000,
+        "nominal_test": 5000
+      },
+      {
+        "event_type": "Blockchain transfers",
+        "nominal_total": 150000,
+        "nominal_train": 90000,
+        "nominal_validation": 30000,
+        "nominal_test": 30000
+      },
+      {
+        "event_type": "Evidence submissions",
+        "nominal_total": 25000,
+        "nominal_train": 15000,
+        "nominal_validation": 5000,
+        "nominal_test": 5000
+      },
+      {
+        "event_type": "Case and review events",
+        "nominal_total": 25000,
+        "nominal_train": 15000,
+        "nominal_validation": 5000,
+        "nominal_test": 5000
+      }
+    ],
+    "eligible_link_opportunities_assumed": 10000,
+    "eligible_review_requests_assumed": 5000,
+    "eligible_benign_cases_assumed": 1000,
+    "eligible_illicit_cases_assumed": 200
+  },
+  "selection": {
+    "preferred_arm": "G1",
+    "highest_recall_arm": "G1",
+    "reason": "Research-informed fictional choice: graph-feature LightGBM versus a basic GINE-style challenger; not Multi-PNA+EU."
+  },
+  "research_references": [
+    {
+      "title": "IBM AML dataset paper, Table 2",
+      "url": "https://arxiv.org/html/2306.16424v3#S4"
+    },
+    {
+      "title": "IBM Multi-GNN paper, Table 2",
+      "url": "https://arxiv.org/html/2306.11586v3#S7.SS2"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "arm": "G2",
+  "status": "completed",
+  "measurement_type": "external_synthetic_benchmark",
+  "run_id": null,
+  "seed": null,
+  "eligible_count": 1000000,
+  "positive_count": 1019,
+  "review_count": 10000,
+  "confusion_counts": {
+    "tp": 530,
+    "fp": 9470,
+    "fn": 489,
+    "tn": 989511
+  },
+  "review_budget_fraction": 0.01,
+  "assumed_prevalence": 0.001019,
+  "metrics": {
+    "recall_at_budget": 0.5201177625122669,
+    "precision_at_budget": 0.053,
+    "false_alert_count": 9470,
+    "average_precision": 0.1778652309913974,
+    "f1_at_budget": 0.09619747708503493
+  },
+  "sensitivity": [
+    {
+      "review_budget_fraction": 0.001,
+      "review_count": 1000,
+      "tp": 204,
+      "fp": 796,
+      "fn": 815,
+      "tn": 998185,
+      "recall": 0.20019627085377822,
+      "precision": 0.204
+    },
+    {
+      "review_budget_fraction": 0.005,
+      "review_count": 5000,
+      "tp": 418,
+      "fp": 4582,
+      "fn": 601,
+      "tn": 994399,
+      "recall": 0.4102060843964671,
+      "precision": 0.0836
+    },
+    {
+      "review_budget_fraction": 0.01,
+      "review_count": 10000,
+      "tp": 530,
+      "fp": 9470,
+      "fn": 489,
+      "tn": 989511,
+      "recall": 0.5201177625122669,
+      "precision": 0.053
+    },
+    {
+      "review_budget_fraction": 0.05,
+      "review_count": 50000,
+      "tp": 785,
+      "fp": 49215,
+      "fn": 234,
+      "tn": 949766,
+      "recall": 0.7703631010794897,
+      "precision": 0.0157
+    }
+  ],
+  "uncertainty": {
+    "supported": false,
+    "interval": null,
+    "method": null
+  },
+  "resource_usage": {
+    "train_seconds": 21600,
+    "inference_p95_ms": 28.0,
+    "feature_seconds": 4200,
+    "peak_host_memory_bytes": 12992276070,
+    "peak_gpu_memory_bytes": 8375186227
+  },
+  "limitations": []
+}
